@@ -1,6 +1,7 @@
 use crate::helpers::{base64_url_encode, compress_and_encode};
 use anyhow::{anyhow, Result};
 use aws::aws_config::AwsConfig;
+use aws::aws_credentials::AwsCredentials;
 use chrono::Utc;
 use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
@@ -48,7 +49,48 @@ pub fn create_login_url(config: &AwsConfig) -> Result<String> {
     Ok(url)
 }
 
-pub fn login(profile: AwsConfig) -> Result<()> {
+pub fn login(profile_name: &str, _aws_no_verify_ssl: bool, _no_prompt: bool) -> Result<()> {
+    let profile = AwsConfig::profile(profile_name)?;
+
+    let _saml = perform_login(profile)?;
+
+    // let roles = parse_roles_from_saml_response(&saml);
+
+    // let (rl, duration_hours) = ask_user_for_role_and_duration(
+    //     &roles,
+    //     no_prompt,
+    //     &profile.azure_default_role_arn,
+    //     &profile.azure_default_duration_hours,
+    // );
+
+    // assume_role(
+    //     profile_name,
+    //     &saml,
+    //     &rl,
+    //     duration_hours,
+    //     aws_no_verify_ssl,
+    //     &profile.region,
+    // );
+
+    Ok(())
+}
+
+pub fn login_all(force_refresh: bool, aws_no_verify_ssl: bool, no_prompt: bool) -> Result<()> {
+    let all_profiles = AwsConfig::profiles()?;
+
+    for profile in all_profiles.iter() {
+        let profile_name = profile.0.as_str();
+        let credentials = AwsCredentials::profile(profile_name).unwrap();
+
+        if force_refresh && credentials.is_profile_about_to_expire() {
+            let _ = login(profile_name, aws_no_verify_ssl, no_prompt);
+        }
+    }
+
+    Ok(())
+}
+
+pub fn perform_login(profile: AwsConfig) -> Result<String> {
     let width = 425;
     let height = 550;
 
@@ -112,5 +154,5 @@ pub fn login(profile: AwsConfig) -> Result<()> {
 
     debug!("Finished");
 
-    Ok(())
+    Ok("TODO: SAML Response".to_string())
 }

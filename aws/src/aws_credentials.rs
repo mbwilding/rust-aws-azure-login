@@ -1,4 +1,4 @@
-﻿use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use directories::UserDirs;
 use serde::{Deserialize, Serialize, Serializer};
@@ -7,11 +7,11 @@ use std::collections::HashMap;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AwsCredentials {
     pub version: u8,
-    pub access_key_id: Option<String>,
-    pub secret_access_key: Option<String>,
-    pub session_token: Option<String>,
+    pub aws_access_key_id: Option<String>,
+    pub aws_secret_access_key: Option<String>,
+    pub aws_session_token: Option<String>,
     #[serde(serialize_with = "serialize_datetime_with_ms")]
-    pub expiration: Option<DateTime<Utc>>,
+    pub aws_expiration: Option<DateTime<Utc>>,
 }
 
 fn serialize_datetime_with_ms<S>(
@@ -34,10 +34,10 @@ impl Default for AwsCredentials {
     fn default() -> Self {
         Self {
             version: 1,
-            access_key_id: None,
-            secret_access_key: None,
-            session_token: None,
-            expiration: None,
+            aws_access_key_id: None,
+            aws_secret_access_key: None,
+            aws_session_token: None,
+            aws_expiration: None,
         }
     }
 }
@@ -103,20 +103,20 @@ impl AwsCredentials {
     }
 
     fn from_ini_section(section: &HashMap<String, Option<String>>) -> Result<AwsCredentials> {
-        let access_key_id = section
+        let aws_access_key_id = section
             .get("aws_access_key_id")
             .and_then(|v| v.as_ref().cloned());
 
-        let secret_access_key = section
+        let aws_secret_access_key = section
             .get("aws_secret_access_key")
             .and_then(|v| v.as_ref().cloned());
 
-        let session_token = section
+        let aws_session_token = section
             .get("aws_session_token")
             .and_then(|v| v.as_ref())
             .map(|s| s.trim_matches('"').to_string());
 
-        let expiration = section
+        let aws_expiration = section
             .get("aws_expiration")
             .and_then(|v| v.as_ref())
             .map(|s| DateTime::parse_from_rfc3339(s).map(|dt| dt.with_timezone(&Utc)))
@@ -124,11 +124,21 @@ impl AwsCredentials {
             .map_err(|e| anyhow!("Failed to parse datetime: {:?}", e))?;
 
         Ok(AwsCredentials {
-            access_key_id,
-            secret_access_key,
-            session_token,
-            expiration,
+            aws_access_key_id,
+            aws_secret_access_key,
+            aws_session_token,
+            aws_expiration,
             ..Default::default()
         })
+    }
+
+    pub fn is_profile_about_to_expire(&self) -> bool {
+        match self.aws_expiration {
+            Some(expiration_date) => {
+                let time_difference = expiration_date.signed_duration_since(Utc::now());
+                time_difference < chrono::Duration::minutes(11)
+            }
+            None => true,
+        }
     }
 }
