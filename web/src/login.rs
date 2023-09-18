@@ -169,25 +169,19 @@ fn ask_user_for_role_and_duration(
     let mut duration_hours: u8 = default_duration_hours.unwrap_or_default();
 
     let selected_role = if roles.is_empty() {
-        bail!("No roles found.");
+        bail!("No roles found in SAML response.");
     } else if roles.len() == 1 {
         roles.first().unwrap().to_owned()
     } else {
         if no_prompt {
             if let Some(ref arn) = default_role_arn {
                 if let Some(role) = roles.iter().find(|r| &r.role_arn == arn) {
-                    role.clone()
+                    role.to_owned()
                 } else {
-                    Role {
-                        role_arn: "".to_string(),
-                        principal_arn: "".to_string(),
-                    }
+                    bail!("No role matching the default role ARN found in the SAML response.");
                 }
             } else {
-                Role {
-                    role_arn: "".to_string(),
-                    principal_arn: "".to_string(),
-                }
+                bail!("No default role ARN provided and multiple roles found in SAML response.");
             }
         } else {
             let selection = Select::new()
@@ -202,7 +196,7 @@ fn ask_user_for_role_and_duration(
                 .interact()
                 .unwrap();
 
-            roles[selection].clone()
+            roles[selection].to_owned()
         }
     };
 

@@ -10,8 +10,8 @@ use std::str;
 
 #[derive(Deserialize, Clone)]
 pub struct Role {
-    pub(crate) role_arn: String,
-    pub(crate) principal_arn: String,
+    pub role_arn: String,
+    pub principal_arn: String,
 }
 
 #[derive(Deserialize)]
