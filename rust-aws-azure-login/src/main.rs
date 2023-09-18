@@ -1,12 +1,12 @@
-use chromiumoxide::{Browser, BrowserConfig};
+use headless_chrome::protocol::cdp::Target::CreateTarget;
+use headless_chrome::{Browser, LaunchOptions};
 use maplit::hashmap;
 use tracing::debug;
 
 pub mod helpers;
 mod login;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         //.json()
         .with_max_level(tracing::Level::DEBUG)
@@ -25,46 +25,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let width = 425;
     let height = 550;
 
-    let (mut browser, mut handler) = Browser::launch(
-        BrowserConfig::builder()
-            .with_head()
-            .window_size(width, height)
-            .build()?,
-    )
-    .await?;
+    let launch_options = LaunchOptions::default_builder()
+        .headless(false)
+        .window_size(Some((width, height)))
+        .build()
+        .unwrap();
 
-    debug!("Opening new page");
-    let page = browser.new_page(&url).await?;
+    let browser = Browser::new(launch_options)?;
+    debug!("Opening new tab");
 
-    // Username
+    let tab = browser.new_tab_with_options(CreateTarget {
+        url: url.clone(),
+        width: Some(width - 15),
+        height: Some(height - 35),
+        browser_context_id: None,
+        enable_begin_frame_control: None,
+        new_window: None,
+        background: None,
+    })?;
+
+    let _ = tab.set_extra_http_headers(hashmap! {
+        "Accept-Language" => "en"
+    });
+
+    tab.set_default_timeout(std::time::Duration::from_secs(10));
+
+    // tab.enable_request_interception(|transport, session_id| hmm)?;
+    // register_response_handling ???
+
     debug!("Waiting for sign in page to load");
-    page.wait_for_navigation().await?;
+    tab.wait_until_navigated()?;
+    // Username
     debug!("Finding username field");
-    let field = page.find_element("input#i0116").await?;
+    let field = tab.wait_for_element("input#i0116")?;
     debug!("Clicking username field");
-    field.click().await?;
+    field.click()?;
     debug!("Entering username");
-    field
-        .type_str(&config?.azure_default_username.unwrap())
-        .await?;
+    tab.send_character(&config?.azure_default_username.unwrap())?;
     debug!("Finding next button");
-    let button = page.find_element("input#idSIButton9").await?;
+    let button = tab.wait_for_element("input#idSIButton9")?;
     debug!("Clicking next button");
-    button.click().await?;
+    button.click()?;
 
-    // Password
     debug!("Waiting for password page to load");
-    page.wait_for_navigation().await?;
+    tab.wait_until_navigated()?;
+    // Password
     debug!("Finding password field");
-    let field = page.find_element("input#i0118").await?;
+    let field = tab.wait_for_element("input#i0118")?;
     debug!("Clicking password field");
-    field.click().await?;
+    field.click()?;
     debug!("Entering password");
-    field.type_str("REDACTED").await?;
+    tab.send_character("REDACTED")?;
     debug!("Finding next button");
-    let button = page.find_element("input#idSIButton9").await?;
+    let button = tab.wait_for_element("input#idSIButton9")?;
     debug!("Clicking next button");
-    button.click().await?;
+    button.click()?;
 
     debug!("Finished");
 
