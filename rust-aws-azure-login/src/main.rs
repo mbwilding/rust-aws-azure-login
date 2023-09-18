@@ -39,23 +39,18 @@ fn main() -> Result<()> {
         }
     };
 
-    let url = login::create_login_url(&app_id_uri, &azure_tenant_id)?;
-    debug!("Opening: {}", url);
-
     let width = 425;
     let height = 550;
 
     let launch_options = LaunchOptions::default_builder()
-        .headless(false)
+        .headless(false) // TODO: true in production
         .window_size(Some((width, height)))
-        .build()
-        .unwrap();
+        .build()?;
 
     let browser = Browser::new(launch_options)?;
-    debug!("Opening new tab");
 
     let tab = browser.new_tab_with_options(CreateTarget {
-        url: url.clone(),
+        url: login::create_login_url(&app_id_uri, &azure_tenant_id)?,
         width: Some(width - 15),
         height: Some(height - 35),
         browser_context_id: None,
