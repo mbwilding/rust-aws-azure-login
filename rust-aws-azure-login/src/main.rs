@@ -1,6 +1,7 @@
 use anyhow::Result;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         //.json()
         .with_max_level(tracing::Level::DEBUG)
@@ -8,7 +9,8 @@ fn main() -> Result<()> {
         .with_line_number(true)
         .init();
 
-    web::login::login("default", false, false)?;
+    // TODO: For testing
+    web::login::login("default", false).await?;
 
     Ok(())
 }

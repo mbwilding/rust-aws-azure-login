@@ -6,7 +6,8 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AwsCredentials {
-    pub version: u8,
+    #[serde(skip)]
+    pub profile_name: Option<String>,
     pub aws_access_key_id: Option<String>,
     pub aws_secret_access_key: Option<String>,
     pub aws_session_token: Option<String>,
@@ -30,18 +31,6 @@ where
     }
 }
 
-impl Default for AwsCredentials {
-    fn default() -> Self {
-        Self {
-            version: 1,
-            aws_access_key_id: None,
-            aws_secret_access_key: None,
-            aws_session_token: None,
-            aws_expiration: None,
-        }
-    }
-}
-
 impl AwsCredentials {
     pub fn profile(profile_name: &str) -> Result<Self> {
         let config = Self::read_config()?;
@@ -53,7 +42,7 @@ impl AwsCredentials {
             )
         })?;
 
-        Self::from_ini_section(aws_profile)
+        Self::from_ini_section(profile_name, aws_profile)
     }
 
     pub fn profiles() -> Result<HashMap<String, Self>> {
@@ -62,7 +51,7 @@ impl AwsCredentials {
         let profile_map: HashMap<String, Self> = config
             .iter()
             .filter_map(|(profile_name, section)| {
-                Self::from_ini_section(section)
+                Self::from_ini_section(profile_name, section)
                     .map(|profile| (profile_name.clone(), profile))
                     .ok()
             })
@@ -102,7 +91,10 @@ impl AwsCredentials {
         Ok(config)
     }
 
-    fn from_ini_section(section: &HashMap<String, Option<String>>) -> Result<AwsCredentials> {
+    fn from_ini_section(
+        profile_name: &str,
+        section: &HashMap<String, Option<String>>,
+    ) -> Result<AwsCredentials> {
         let aws_access_key_id = section
             .get("aws_access_key_id")
             .and_then(|v| v.as_ref().cloned());
@@ -124,11 +116,11 @@ impl AwsCredentials {
             .map_err(|e| anyhow!("Failed to parse datetime: {:?}", e))?;
 
         Ok(AwsCredentials {
+            profile_name: Some(profile_name.to_owned()),
             aws_access_key_id,
             aws_secret_access_key,
             aws_session_token,
             aws_expiration,
-            ..Default::default()
         })
     }
 

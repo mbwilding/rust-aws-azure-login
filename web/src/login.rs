@@ -3,6 +3,8 @@ use crate::saml_response::{parse_roles_from_saml_response, Role};
 use anyhow::{anyhow, bail, Result};
 use aws::aws_config::AwsConfig;
 use aws::aws_credentials::AwsCredentials;
+use aws_sdk_sts::config::Region;
+use aws_smithy_types::date_time::Format;
 use chrono::Utc;
 use dialoguer::{Input, Select};
 use headless_chrome::protocol::cdp::Target::CreateTarget;
@@ -13,11 +15,9 @@ use uuid::Uuid;
 
 fn create_login_url(config: &AwsConfig) -> Result<String> {
     let assertion_consumer_service_url = match &config.region {
-        Some(r) if r.starts_with("us-gov") => {
-            "https://signin.amazonaws-us-gov.com/saml".to_string()
-        }
-        Some(r) if r.starts_with("cn-") => "https://signin.amazonaws.cn/saml".to_string(),
-        _ => "https://signin.aws.amazon.com/saml".to_string(),
+        Some(r) if r.starts_with("us-gov") => "https://signin.amazonaws-us-gov.com/saml",
+        Some(r) if r.starts_with("cn-") => "https://signin.amazonaws.cn/saml",
+        _ => "https://signin.aws.amazon.com/saml",
     };
 
     let saml_request = format!(
@@ -51,10 +51,10 @@ fn create_login_url(config: &AwsConfig) -> Result<String> {
     Ok(url)
 }
 
-pub fn login(profile_name: &str, aws_no_verify_ssl: bool, no_prompt: bool) -> Result<()> {
+pub async fn login(profile_name: &str, no_prompt: bool) -> Result<AwsCredentials> {
     let profile = &AwsConfig::profile(profile_name)?;
 
-    let saml = perform_login(&profile)?;
+    let saml = perform_login(profile)?;
 
     let roles = parse_roles_from_saml_response(&saml)?;
 
@@ -65,31 +65,34 @@ pub fn login(profile_name: &str, aws_no_verify_ssl: bool, no_prompt: bool) -> Re
         profile.azure_default_duration_hours,
     )?;
 
-    // assume_role(
-    //     profile_name,
-    //     &saml,
-    //     &rl,
-    //     duration_hours,
-    //     aws_no_verify_ssl,
-    //     &profile.region,
-    // );
+    let credentials = assume_role(
+        profile_name,
+        &saml,
+        role,
+        duration_hours,
+        profile.region.to_owned(),
+    )
+    .await?;
 
-    Ok(())
+    Ok(credentials)
 }
 
-pub fn login_all(force_refresh: bool, aws_no_verify_ssl: bool, no_prompt: bool) -> Result<()> {
+pub async fn login_all(force_refresh: bool, no_prompt: bool) -> Result<Vec<AwsCredentials>> {
     let all_profiles = AwsConfig::profiles()?;
+
+    let mut profiles_to_refresh = Vec::new();
 
     for profile in all_profiles.iter() {
         let profile_name = profile.0.as_str();
-        let credentials = AwsCredentials::profile(profile_name).unwrap();
+        let credentials = AwsCredentials::profile(profile_name)?;
 
-        if force_refresh && credentials.is_profile_about_to_expire() {
-            let _ = login(profile_name, aws_no_verify_ssl, no_prompt);
+        if force_refresh || credentials.is_profile_about_to_expire() {
+            let credentials = login(profile_name, no_prompt).await?;
+            profiles_to_refresh.push(credentials);
         }
     }
 
-    Ok(())
+    Ok(profiles_to_refresh)
 }
 
 fn perform_login(profile: &AwsConfig) -> Result<String> {
@@ -104,7 +107,7 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
     let browser = Browser::new(launch_options)?;
 
     let tab = browser.new_tab_with_options(CreateTarget {
-        url: create_login_url(&profile)?,
+        url: create_login_url(profile)?,
         width: Some(width - 15),
         height: Some(height - 35),
         browser_context_id: None,
@@ -172,32 +175,30 @@ fn ask_user_for_role_and_duration(
         bail!("No roles found in SAML response.");
     } else if roles.len() == 1 {
         roles.first().unwrap().to_owned()
-    } else {
-        if no_prompt {
-            if let Some(ref arn) = default_role_arn {
-                if let Some(role) = roles.iter().find(|r| &r.role_arn == arn) {
-                    role.to_owned()
-                } else {
-                    bail!("No role matching the default role ARN found in the SAML response.");
-                }
+    } else if no_prompt {
+        if let Some(ref arn) = default_role_arn {
+            if let Some(role) = roles.iter().find(|r| &r.role_arn == arn) {
+                role.to_owned()
             } else {
-                bail!("No default role ARN provided and multiple roles found in SAML response.");
+                bail!("No role matching the default role ARN found in the SAML response.");
             }
         } else {
-            let selection = Select::new()
-                .with_prompt("Role:")
-                .default(0)
-                .items(
-                    &roles
-                        .iter()
-                        .map(|r| r.role_arn.as_str())
-                        .collect::<Vec<_>>(),
-                )
-                .interact()
-                .unwrap();
-
-            roles[selection].to_owned()
+            bail!("No default role ARN provided and multiple roles found in SAML response.");
         }
+    } else {
+        let selection = Select::new()
+            .with_prompt("Role:")
+            .default(0)
+            .items(
+                &roles
+                    .iter()
+                    .map(|r| r.role_arn.as_str())
+                    .collect::<Vec<_>>(),
+            )
+            .interact()
+            .unwrap();
+
+        roles[selection].to_owned()
     };
 
     if !no_prompt || default_duration_hours.is_none() {
@@ -217,4 +218,67 @@ fn ask_user_for_role_and_duration(
     }
 
     Ok((selected_role, duration_hours))
+}
+
+async fn assume_role(
+    profile_name: &str,
+    assertion: &str,
+    role: Role,
+    duration_hours: u8,
+    region: Option<String>,
+) -> Result<AwsCredentials> {
+    let config = if let Some(region_str) = region {
+        aws_config::from_env()
+            .region(Region::new(region_str))
+            .load()
+            .await
+    } else {
+        aws_config::from_env().load().await
+    };
+
+    let sts_client = aws_sdk_sts::Client::new(&config);
+
+    let duration_seconds = (duration_hours as i32) * 60 * 60;
+
+    let assume_role_request = sts_client
+        .assume_role_with_saml()
+        .role_arn(role.role_arn)
+        .principal_arn(role.principal_arn)
+        .saml_assertion(assertion)
+        .duration_seconds(duration_seconds);
+
+    let assume_role_output = assume_role_request.send().await?;
+
+    let credentials = assume_role_output
+        .credentials
+        .ok_or(anyhow!("No credentials found in assume role response"))?;
+
+    let access_key_id = credentials
+        .access_key_id
+        .ok_or(anyhow!("No access key ID found in assume role response"))?;
+
+    let secret_access_key = credentials.secret_access_key.ok_or(anyhow!(
+        "No secret access key found in assume role response"
+    ))?;
+
+    let session_token = credentials
+        .session_token
+        .ok_or(anyhow!("No session token found in assume role response"))?;
+
+    let expiration = credentials
+        .expiration
+        .ok_or(anyhow!("No expiration found in assume role response"))?
+        .fmt(Format::DateTime)?;
+
+    let expiration = chrono::DateTime::parse_from_rfc3339(&expiration)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|e| anyhow!("Failed to parse datetime: {:?}", e))?;
+
+    Ok(AwsCredentials {
+        profile_name: Some(profile_name.to_owned()),
+        aws_access_key_id: Some(access_key_id),
+        aws_secret_access_key: Some(secret_access_key),
+        aws_session_token: Some(session_token),
+        aws_expiration: Some(expiration),
+    })
 }
