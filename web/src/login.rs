@@ -56,10 +56,10 @@ pub fn login(profile_name: &str, aws_no_verify_ssl: bool, no_prompt: bool) -> Re
 
     let saml = perform_login(&profile)?;
 
-    let roles = parse_roles_from_saml_response(&saml);
+    let roles = parse_roles_from_saml_response(&saml)?;
 
     let (role, duration_hours) = ask_user_for_role_and_duration(
-        roles?,
+        roles,
         no_prompt,
         profile.azure_default_role_arn.clone(),
         profile.azure_default_duration_hours,
@@ -122,9 +122,9 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
     // tab.enable_request_interception(|transport, session_id| hmm)?;
     // register_response_handling ???
 
+    // Username
     debug!("Waiting for sign in page to load");
     tab.wait_until_navigated()?;
-    // Username
     debug!("Finding username field");
     let field = tab.wait_for_element("input#i0116")?;
     debug!("Clicking username field");
@@ -141,9 +141,9 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
     debug!("Clicking next button");
     button.click()?;
 
+    // Password
     debug!("Waiting for password page to load");
     tab.wait_until_navigated()?;
-    // Password
     debug!("Finding password field");
     let field = tab.wait_for_element("input#i0118")?;
     debug!("Clicking password field");
@@ -203,7 +203,7 @@ fn ask_user_for_role_and_duration(
     if !no_prompt || default_duration_hours.is_none() {
         let duration_input: String = Input::new()
             .with_prompt("Session Duration Hours (up to 12)")
-            .default(default_duration_hours.map_or(String::new(), |x| x.to_string())) // Convert Option<u8> to String
+            .default(default_duration_hours.map_or(String::new(), |x| x.to_string()))
             .validate_with(|input: &String| {
                 match input.parse::<u8>() {
                     // Parsing the input string to u8

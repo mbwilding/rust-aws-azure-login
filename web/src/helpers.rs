@@ -7,9 +7,8 @@ use std::io::Write;
 use url::form_urlencoded;
 
 pub fn base64_decode_to_string(string: &str) -> Result<String> {
-    let mut output = Vec::new();
-    general_purpose::STANDARD.decode_slice(string, &mut output)?;
-    Ok(String::from_utf8(output)?)
+    let output_vec = general_purpose::STANDARD.decode(string)?;
+    Ok(String::from_utf8(output_vec)?)
 }
 
 pub fn compress_and_encode(string: &str) -> Result<Vec<u8>> {
