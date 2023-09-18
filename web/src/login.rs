@@ -1,15 +1,17 @@
 use crate::helpers::{base64_url_encode, compress_and_encode};
-use anyhow::{anyhow, Result};
+use crate::saml_response::{parse_roles_from_saml_response, Role};
+use anyhow::{anyhow, bail, Result};
 use aws::aws_config::AwsConfig;
 use aws::aws_credentials::AwsCredentials;
 use chrono::Utc;
+use dialoguer::{Input, Select};
 use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
 use maplit::hashmap;
 use tracing::debug;
 use uuid::Uuid;
 
-pub fn create_login_url(config: &AwsConfig) -> Result<String> {
+fn create_login_url(config: &AwsConfig) -> Result<String> {
     let assertion_consumer_service_url = match &config.region {
         Some(r) if r.starts_with("us-gov") => {
             "https://signin.amazonaws-us-gov.com/saml".to_string()
@@ -49,19 +51,19 @@ pub fn create_login_url(config: &AwsConfig) -> Result<String> {
     Ok(url)
 }
 
-pub fn login(profile_name: &str, _aws_no_verify_ssl: bool, _no_prompt: bool) -> Result<()> {
-    let profile = AwsConfig::profile(profile_name)?;
+pub fn login(profile_name: &str, aws_no_verify_ssl: bool, no_prompt: bool) -> Result<()> {
+    let profile = &AwsConfig::profile(profile_name)?;
 
-    let _saml = perform_login(profile)?;
+    let saml = perform_login(&profile)?;
 
-    // let roles = parse_roles_from_saml_response(&saml);
+    let roles = parse_roles_from_saml_response(&saml);
 
-    // let (rl, duration_hours) = ask_user_for_role_and_duration(
-    //     &roles,
-    //     no_prompt,
-    //     &profile.azure_default_role_arn,
-    //     &profile.azure_default_duration_hours,
-    // );
+    let (role, duration_hours) = ask_user_for_role_and_duration(
+        roles?,
+        no_prompt,
+        profile.azure_default_role_arn.clone(),
+        profile.azure_default_duration_hours,
+    )?;
 
     // assume_role(
     //     profile_name,
@@ -90,7 +92,7 @@ pub fn login_all(force_refresh: bool, aws_no_verify_ssl: bool, no_prompt: bool) 
     Ok(())
 }
 
-pub fn perform_login(profile: AwsConfig) -> Result<String> {
+fn perform_login(profile: &AwsConfig) -> Result<String> {
     let width = 425;
     let height = 550;
 
@@ -129,8 +131,9 @@ pub fn perform_login(profile: AwsConfig) -> Result<String> {
     field.click()?;
     debug!("Entering username");
     tab.send_character(
-        &profile
+        profile
             .azure_default_username
+            .as_ref()
             .ok_or(anyhow!("azure_default_username not set"))?,
     )?;
     debug!("Finding next button");
@@ -155,4 +158,69 @@ pub fn perform_login(profile: AwsConfig) -> Result<String> {
     debug!("Finished");
 
     Ok("TODO: SAML Response".to_string())
+}
+
+fn ask_user_for_role_and_duration(
+    roles: Vec<Role>,
+    no_prompt: bool,
+    default_role_arn: Option<String>,
+    default_duration_hours: Option<u8>,
+) -> Result<(Role, u8)> {
+    let mut duration_hours: u8 = default_duration_hours.unwrap_or_default();
+
+    let selected_role = if roles.is_empty() {
+        bail!("No roles found.");
+    } else if roles.len() == 1 {
+        roles.first().unwrap().to_owned()
+    } else {
+        if no_prompt {
+            if let Some(ref arn) = default_role_arn {
+                if let Some(role) = roles.iter().find(|r| &r.role_arn == arn) {
+                    role.clone()
+                } else {
+                    Role {
+                        role_arn: "".to_string(),
+                        principal_arn: "".to_string(),
+                    }
+                }
+            } else {
+                Role {
+                    role_arn: "".to_string(),
+                    principal_arn: "".to_string(),
+                }
+            }
+        } else {
+            let selection = Select::new()
+                .with_prompt("Role:")
+                .default(0)
+                .items(
+                    &roles
+                        .iter()
+                        .map(|r| r.role_arn.as_str())
+                        .collect::<Vec<_>>(),
+                )
+                .interact()
+                .unwrap();
+
+            roles[selection].clone()
+        }
+    };
+
+    if !no_prompt || default_duration_hours.is_none() {
+        let duration_input: String = Input::new()
+            .with_prompt("Session Duration Hours (up to 12)")
+            .default(default_duration_hours.map_or(String::new(), |x| x.to_string())) // Convert Option<u8> to String
+            .validate_with(|input: &String| {
+                match input.parse::<u8>() {
+                    // Parsing the input string to u8
+                    Ok(n) if n > 0 && n <= 12 => Ok(()),
+                    _ => Err("Duration hours must be between 0 and 12".to_string()),
+                }
+            })
+            .interact()?;
+
+        duration_hours = duration_input.parse()?;
+    }
+
+    Ok((selected_role, duration_hours))
 }

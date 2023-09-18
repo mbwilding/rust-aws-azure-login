@@ -8,8 +8,7 @@ fn main() -> Result<()> {
         .with_line_number(true)
         .init();
 
-    let config = aws::aws_config::AwsConfig::profile_default()?;
-    web::login::perform_login(config)?;
+    web::login::login("default", false, false)?;
 
     Ok(())
 }
