@@ -7,7 +7,19 @@ use maplit::hashmap;
 use tracing::debug;
 use uuid::Uuid;
 
-pub fn create_login_url(app_id_uri: &str, tenant_id: &str) -> Result<String> {
+pub fn create_login_url(
+    azure_app_id_uri: &str,
+    azure_tenant_id: &str,
+    region: Option<String>,
+) -> Result<String> {
+    let assertion_consumer_service_url = match region {
+        Some(r) if r.starts_with("us-gov") => {
+            "https://signin.amazonaws-us-gov.com/saml".to_string()
+        }
+        Some(r) if r.starts_with("cn-") => "https://signin.amazonaws.cn/saml".to_string(),
+        _ => "https://signin.aws.amazon.com/saml".to_string(),
+    };
+
     let saml_request = format!(
         r#"
         <samlp:AuthnRequest xmlns="urn:oasis:names:tc:SAML:2.0:metadata" ID="id{}" Version="2.0" IssueInstant="{}" IsPassive="false" AssertionConsumerServiceURL="{}" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
@@ -17,8 +29,8 @@ pub fn create_login_url(app_id_uri: &str, tenant_id: &str) -> Result<String> {
         "#,
         Uuid::new_v4(),
         Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
-        app_id_uri,
-        app_id_uri
+        assertion_consumer_service_url,
+        azure_app_id_uri
     );
 
     let compressed_bytes = compress_and_encode(&saml_request)?;
@@ -26,13 +38,13 @@ pub fn create_login_url(app_id_uri: &str, tenant_id: &str) -> Result<String> {
 
     let url = format!(
         "https://login.microsoftonline.com/{}/saml2?SAMLRequest={}",
-        tenant_id, saml_base64_encoded
+        azure_tenant_id, saml_base64_encoded
     );
 
     Ok(url)
 }
 
-pub fn perform_login(profile: aws::aws_config::AwsConfig) -> Result<()> {
+pub fn login(profile: aws::aws_config::AwsConfig) -> Result<()> {
     let app_id_uri = match profile.azure_app_id_uri {
         Some(x) => x,
         None => {
@@ -65,7 +77,7 @@ pub fn perform_login(profile: aws::aws_config::AwsConfig) -> Result<()> {
     let browser = Browser::new(launch_options)?;
 
     let tab = browser.new_tab_with_options(CreateTarget {
-        url: create_login_url(&app_id_uri, &azure_tenant_id)?,
+        url: create_login_url(&app_id_uri, &azure_tenant_id, profile.region)?,
         width: Some(width - 15),
         height: Some(height - 35),
         browser_context_id: None,

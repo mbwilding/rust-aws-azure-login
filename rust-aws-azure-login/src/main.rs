@@ -9,7 +9,7 @@ fn main() -> Result<()> {
         .init();
 
     let config = aws::aws_config::AwsConfig::profile_default()?;
-    web::login::perform_login(config)?;
+    web::login::login(config)?;
 
     Ok(())
 }
