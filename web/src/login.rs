@@ -7,9 +7,15 @@ use aws_sdk_sts::config::Region;
 use aws_smithy_types::date_time::Format;
 use chrono::Utc;
 use dialoguer::{Input, Select};
+use headless_chrome::browser::tab::{RequestInterceptor, RequestPausedDecision};
+use headless_chrome::browser::transport::{SessionId, Transport};
+use headless_chrome::protocol::cdp::Fetch::events::RequestPausedEvent;
+use headless_chrome::protocol::cdp::Network::{GetResponseBody, RequestPattern};
 use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
 use maplit::hashmap;
+use scraper::{Html, Selector};
+use std::sync::{Arc, Mutex};
 use tracing::debug;
 use uuid::Uuid;
 
@@ -122,8 +128,8 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
 
     tab.set_default_timeout(std::time::Duration::from_secs(10));
 
-    // tab.enable_request_interception(|transport, session_id| hmm)?;
-    // register_response_handling ???
+    let saml_interceptor = Arc::new(SamlRequestInterceptor::new());
+    tab.enable_request_interception(saml_interceptor.clone())?;
 
     // Username
     debug!("Waiting for sign in page to load");
@@ -160,7 +166,17 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
 
     debug!("Finished");
 
-    Ok("TODO: SAML Response".to_string())
+    // Match on the Option and then on the Result
+    let response = match saml_interceptor.response.clone().lock().unwrap().take() {
+        Some(Ok(string)) => {
+            // Do something with the string if needed
+            Ok(string)
+        }
+        Some(Err(e)) => Err(e),
+        None => Err(anyhow!("No SAML response found is the body")),
+    }?;
+
+    Ok(response)
 }
 
 fn ask_user_for_role_and_duration(
@@ -281,4 +297,58 @@ async fn assume_role(
         aws_session_token: Some(session_token),
         aws_expiration: Some(expiration),
     })
+}
+
+struct SamlRequestInterceptor {
+    response: Arc<Mutex<Option<Result<String>>>>,
+}
+
+impl SamlRequestInterceptor {
+    fn new() -> Self {
+        SamlRequestInterceptor {
+            response: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
+impl RequestInterceptor for SamlRequestInterceptor {
+    fn intercept(
+        &self,
+        transport: Arc<Transport>,
+        session_id: SessionId,
+        event: RequestPausedEvent,
+    ) -> RequestPausedDecision {
+        if !event.params.request.url.starts_with("https://*amazon*") {
+            return RequestPausedDecision::Continue(None);
+        }
+
+        debug!("Intercepted SAML request: {:?}", event.params.request.url);
+
+        let response_maybe = transport
+            .call_method_on_target(
+                session_id,
+                GetResponseBody {
+                    request_id: event.params.request_id,
+                },
+            )
+            .map_err(|e| anyhow!("Failed to get response body: {:?}", e));
+
+        // If response retrieval is successful, parse HTML and extract SAMLResponse
+        if let Ok(html_body) = response_maybe {
+            let parsed_html = Html::parse_document(&html_body.body);
+            let selector = Selector::parse(r#"input[name="SAMLResponse"]"#).unwrap();
+            if let Some(element) = parsed_html.select(&selector).next() {
+                if let Some(saml_value) = element.value().attr("value") {
+                    let mut response_lock = self.response.lock().unwrap();
+                    debug!("SAML response: {:?}", saml_value);
+                    *response_lock = Some(Ok(saml_value.to_string()));
+                }
+            }
+        } else {
+            let mut response_lock = self.response.lock().unwrap();
+            *response_lock = Some(response_maybe.map(|_| "".to_string()));
+        }
+
+        RequestPausedDecision::Continue(None)
+    }
 }

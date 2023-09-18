@@ -19,6 +19,7 @@ log = "0.4.20"
 serde = { version = "1.0", features = ["derive"] }
 serde-xml-rs = "0.6"
 dialoguer = "0.10"
+scraper = "0.17"
 aws-sdk-sts = "0.30"
 aws-config = "0.56"
 aws-credential-types = "0.56"
