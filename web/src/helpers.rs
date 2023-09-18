@@ -8,7 +8,7 @@ use url::form_urlencoded;
 
 pub fn base64_url_encode(bytes: &[u8]) -> String {
     let mut output = String::new();
-    general_purpose::STANDARD.encode_string(&bytes, &mut output);
+    general_purpose::STANDARD.encode_string(bytes, &mut output);
     form_urlencoded::byte_serialize(output.as_bytes()).collect()
 }
 

@@ -1,0 +1,18 @@
+[package]
+name = "web"
+version = "0.1.0"
+edition = "2021"
+authors = ["Matt Wilding <tabmaw@rwwa.com.au>"]
+
+[dependencies]
+aws = { path = "../aws" }
+tracing = "0.1"
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.4", features = ["v4"] }
+flate2 = "1.0"
+base64 = "0.21"
+url = "2.4"
+maplit = "1.0"
+headless_chrome = {git = "https://github.com/atroche/rust-headless-chrome", features = ["fetch"]}
+log = "0.4.20"

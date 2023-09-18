@@ -88,42 +88,33 @@ impl AwsConfig {
     }
 
     fn from_ini_section(section: &HashMap<String, Option<String>>) -> Result<Self> {
-        let azure_tenant_id = section
-            .get("azure_tenant_id")
-            .cloned()
-            .unwrap_or_else(|| None);
+        let azure_tenant_id = section.get("azure_tenant_id").cloned().unwrap_or(None);
 
-        let azure_app_id_uri = section
-            .get("azure_app_id_uri")
-            .cloned()
-            .unwrap_or_else(|| None);
+        let azure_app_id_uri = section.get("azure_app_id_uri").cloned().unwrap_or(None);
 
         let azure_default_username = section
             .get("azure_default_username")
             .cloned()
-            .unwrap_or_else(|| None);
+            .unwrap_or(None);
 
         let azure_default_role_arn = section
             .get("azure_default_role_arn")
             .cloned()
-            .unwrap_or_else(|| None);
+            .unwrap_or(None);
 
         let azure_default_duration_hours = section
             .get("azure_default_duration_hours")
             .and_then(|v| v.clone())
             .and_then(|s| s.parse().ok());
 
-        let region = section.get("region").cloned().unwrap_or_else(|| None);
+        let region = section.get("region").cloned().unwrap_or(None);
 
         let azure_default_remember_me = section
             .get("azure_default_remember_me")
             .and_then(|v| v.clone())
             .and_then(|s| s.parse().ok());
 
-        let credential_process = section
-            .get("credential_process")
-            .cloned()
-            .unwrap_or_else(|| None);
+        let credential_process = section.get("credential_process").cloned().unwrap_or(None);
 
         Ok(Self {
             azure_tenant_id,
