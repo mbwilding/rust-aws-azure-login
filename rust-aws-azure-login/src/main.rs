@@ -42,8 +42,12 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
+    if args.all_profiles {
+        web::login::login_all(args.force_refresh, args.no_prompt).await?;
+    }
+
     // TODO: For testing
-    web::login::login("default", args.no_prompt).await?;
+    web::login::login("default", args.force_refresh, args.no_prompt).await?;
 
     Ok(())
 }

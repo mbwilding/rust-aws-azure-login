@@ -57,8 +57,20 @@ fn create_login_url(config: &AwsConfig) -> Result<String> {
     Ok(url)
 }
 
-pub async fn login(profile_name: &str, no_prompt: bool) -> Result<AwsCredentials> {
+pub async fn login(
+    profile_name: &str,
+    force_refresh: bool,
+    no_prompt: bool,
+) -> Result<AwsCredentials> {
     let profile = &AwsConfig::profile(profile_name)?;
+
+    // TODO: This will cause an IO write to the creds, even if no change
+    if !force_refresh {
+        let credentials = AwsCredentials::profile(profile_name)?;
+        if !credentials.is_profile_about_to_expire() {
+            return Ok(credentials);
+        }
+    }
 
     let saml = perform_login(profile)?;
 
@@ -93,7 +105,7 @@ pub async fn login_all(force_refresh: bool, no_prompt: bool) -> Result<Vec<AwsCr
         let credentials = AwsCredentials::profile(profile_name)?;
 
         if force_refresh || credentials.is_profile_about_to_expire() {
-            let credentials = login(profile_name, no_prompt).await?;
+            let credentials = login(profile_name, force_refresh, no_prompt).await?;
             profiles_to_refresh.push(credentials);
         }
     }
