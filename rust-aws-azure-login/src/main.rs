@@ -20,7 +20,9 @@ struct Args {
     #[arg(short, long, default_value_t = false)]
     configure: bool,
 
-    /// 'cli' to hide the login page and perform the login through the CLI (default behavior), 'gui' to perform the login through the Azure GUI (more reliable but only works on GUI operating system), 'debug' to show the login page but perform the login through the CLI (useful to debug issues with the CLI login)
+    /// 'cli' hides the login page and perform the login through the CLI;
+    /// 'gui' performs the login through the Azure GUI;
+    /// 'debug' shows the login page but perform the login through the CLI
     #[arg(short, long, default_value = "cli")]
     mode: String,
 
