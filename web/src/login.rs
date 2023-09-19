@@ -16,6 +16,7 @@ use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
 use maplit::hashmap;
 use scraper::{Html, Selector};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tracing::debug;
 use uuid::Uuid;
@@ -118,9 +119,15 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
     let width = 425;
     let height = 550;
 
+    let path = PathBuf::from(r"C:\Program Files\Google\Chrome\Application\chrome.exe");
+
     let launch_options = LaunchOptions::default_builder()
+        .path(Some(path))
         .headless(false) // TODO: true in production
         .window_size(Some((width, height)))
+        .user_data_dir(Some(PathBuf::from(
+            r"C:\Users\mbwil\AppData\Local\Google\Chrome\User Data",
+        )))
         .build()?;
 
     let browser = Browser::new(launch_options)?;
@@ -135,61 +142,53 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
         background: None,
     })?;
 
-    let _ = tab.set_extra_http_headers(hashmap! {
+    tab.set_extra_http_headers(hashmap! {
         "Accept-Language" => "en"
-    });
+    })?;
 
     tab.set_default_timeout(std::time::Duration::from_secs(10));
 
-    let saml_interceptor = Arc::new(SamlRequestInterceptor::new());
-    tab.enable_request_interception(saml_interceptor.clone())?;
+    if false {
+        // Username
+        debug!("Waiting for sign in page to load");
+        tab.wait_until_navigated()?;
+        debug!("Finding username field");
+        let field = tab.wait_for_element("input#i0116")?;
+        debug!("Clicking username field");
+        field.click()?;
+        debug!("Entering username");
+        tab.send_character(
+            profile
+                .azure_default_username
+                .as_ref()
+                .ok_or(anyhow!("azure_default_username not set"))?,
+        )?;
+        debug!("Finding next button");
+        let button = tab.wait_for_element("input#idSIButton9")?;
+        debug!("Clicking next button");
+        button.click()?;
 
-    // Username
-    debug!("Waiting for sign in page to load");
-    tab.wait_until_navigated()?;
-    debug!("Finding username field");
-    let field = tab.wait_for_element("input#i0116")?;
-    debug!("Clicking username field");
-    field.click()?;
-    debug!("Entering username");
-    tab.send_character(
-        profile
-            .azure_default_username
-            .as_ref()
-            .ok_or(anyhow!("azure_default_username not set"))?,
-    )?;
-    debug!("Finding next button");
-    let button = tab.wait_for_element("input#idSIButton9")?;
-    debug!("Clicking next button");
-    button.click()?;
+        // Password
+        debug!("Waiting for password page to load");
+        tab.wait_until_navigated()?;
+        debug!("Finding password field");
+        let field = tab.wait_for_element("input#i0118")?;
+        debug!("Clicking password field");
+        field.click()?;
+        debug!("Entering password");
+        tab.send_character("TODO: Securely saved password")?;
+        debug!("Finding next button");
+        let button = tab.wait_for_element("input#idSIButton9")?;
+        debug!("Clicking next button");
+        button.click()?;
 
-    // Password
-    debug!("Waiting for password page to load");
-    tab.wait_until_navigated()?;
-    debug!("Finding password field");
-    let field = tab.wait_for_element("input#i0118")?;
-    debug!("Clicking password field");
-    field.click()?;
-    debug!("Entering password");
-    tab.send_character("TODO: Securely saved password")?;
-    debug!("Finding next button");
-    let button = tab.wait_for_element("input#idSIButton9")?;
-    debug!("Clicking next button");
-    button.click()?;
+        debug!("Finished");
+    }
 
-    debug!("Finished");
+    let saml_response = tab.wait_for_element("form#saml_form > input[name=SAMLResponse]")?;
+    let saml = saml_response.get_attribute_value("value")?.unwrap();
 
-    // Match on the Option and then on the Result
-    let response = match saml_interceptor.response.clone().lock().unwrap().take() {
-        Some(Ok(string)) => {
-            // Do something with the string if needed
-            Ok(string)
-        }
-        Some(Err(e)) => Err(e),
-        None => Err(anyhow!("No SAML response found is the body")),
-    }?;
-
-    Ok(response)
+    Ok(saml)
 }
 
 fn ask_user_for_role_and_duration(
@@ -311,58 +310,4 @@ async fn assume_role(
         aws_session_token: Some(session_token),
         aws_expiration: Some(expiration),
     })
-}
-
-struct SamlRequestInterceptor {
-    response: Arc<Mutex<Option<Result<String>>>>,
-}
-
-impl SamlRequestInterceptor {
-    fn new() -> Self {
-        SamlRequestInterceptor {
-            response: Arc::new(Mutex::new(None)),
-        }
-    }
-}
-
-impl RequestInterceptor for SamlRequestInterceptor {
-    fn intercept(
-        &self,
-        transport: Arc<Transport>,
-        session_id: SessionId,
-        event: RequestPausedEvent,
-    ) -> RequestPausedDecision {
-        if !event.params.request.url.starts_with("https://*amazon*") {
-            return RequestPausedDecision::Continue(None);
-        }
-
-        debug!("Intercepted SAML request: {:?}", event.params.request.url);
-
-        let response_maybe = transport
-            .call_method_on_target(
-                session_id,
-                GetResponseBody {
-                    request_id: event.params.request_id,
-                },
-            )
-            .map_err(|e| anyhow!("Failed to get response body: {:?}", e));
-
-        // If response retrieval is successful, parse HTML and extract SAMLResponse
-        if let Ok(html_body) = response_maybe {
-            let parsed_html = Html::parse_document(&html_body.body);
-            let selector = Selector::parse(r#"input[name="SAMLResponse"]"#).unwrap();
-            if let Some(element) = parsed_html.select(&selector).next() {
-                if let Some(saml_value) = element.value().attr("value") {
-                    let mut response_lock = self.response.lock().unwrap();
-                    debug!("SAML response: {:?}", saml_value);
-                    *response_lock = Some(Ok(saml_value.to_string()));
-                }
-            }
-        } else {
-            let mut response_lock = self.response.lock().unwrap();
-            *response_lock = Some(response_maybe.map(|_| "".to_string()));
-        }
-
-        RequestPausedDecision::Continue(None)
-    }
 }

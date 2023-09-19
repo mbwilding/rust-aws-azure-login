@@ -1,5 +1,4 @@
 use anyhow::Result;
-use aws::aws_credentials::AwsCredentials;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
