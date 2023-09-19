@@ -1,11 +1,12 @@
 use anyhow::Result;
 use clap::Parser;
+use tracing::info;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// The name of the profile to log in with (or configure)
-    #[arg(short, long, default_value = "default")]
+    #[arg(short, long, default_value = "")]
     profile: String,
 
     /// Run for all configured profiles
@@ -42,12 +43,22 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
+    let profile = resolve_profile_name(&args);
+    info!("Profile: {}", profile);
+
     if args.all_profiles {
         web::login::login_all(args.force_refresh, args.no_prompt).await?;
+    } else {
+        web::login::login(&profile, args.force_refresh, args.no_prompt).await?;
     }
 
-    // TODO: For testing
-    web::login::login("default", args.force_refresh, args.no_prompt).await?;
-
     Ok(())
+}
+
+fn resolve_profile_name(args: &Args) -> String {
+    if !args.profile.is_empty() {
+        args.profile.clone()
+    } else {
+        std::env::var("AWS_PROFILE").unwrap_or("default".to_string())
+    }
 }

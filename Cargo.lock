@@ -144,6 +144,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "dialoguer",
  "directories 5.0.1",
  "ini",
  "serde",

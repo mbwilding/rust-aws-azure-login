@@ -60,12 +60,6 @@ impl AwsCredentials {
         Ok(profile_map)
     }
 
-    pub fn profile_default() -> Result<Self> {
-        std::env::var("AWS_PROFILE")
-            .map(|profile_name| Self::profile(&profile_name))
-            .unwrap_or_else(|_| Self::profile("default"))
-    }
-
     fn get_credentials_path() -> Result<String> {
         match UserDirs::new() {
             Some(user_dirs) => {
