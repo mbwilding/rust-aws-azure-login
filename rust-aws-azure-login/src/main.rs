@@ -1,4 +1,33 @@
 use anyhow::Result;
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// The name of the profile to log in with (or configure)
+    #[arg(short, long, default_value = "default")]
+    profile: String,
+
+    /// Run for all configured profiles
+    #[arg(short, long, default_value_t = false)]
+    all_profiles: bool,
+
+    /// Force a credential refresh, even if they are still valid
+    #[arg(short, long, default_value_t = false)]
+    force_refresh: bool,
+
+    /// Configure the profile
+    #[arg(short, long, default_value_t = false)]
+    configure: bool,
+
+    /// 'cli' to hide the login page and perform the login through the CLI (default behavior), 'gui' to perform the login through the Azure GUI (more reliable but only works on GUI operating system), 'debug' to show the login page but perform the login through the CLI (useful to debug issues with the CLI login)
+    #[arg(short, long, default_value = "cli")]
+    mode: String,
+
+    /// Do not prompt for input and accept the default choice
+    #[arg(short, long)]
+    no_prompt: bool,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -9,8 +38,10 @@ async fn main() -> Result<()> {
         .with_line_number(true)
         .init();
 
+    let args = Args::parse();
+
     // TODO: For testing
-    web::login::login("default", false).await?;
+    web::login::login("default", args.no_prompt).await?;
 
     Ok(())
 }

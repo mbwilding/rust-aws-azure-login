@@ -10,7 +10,7 @@ use dialoguer::{Input, Select};
 use headless_chrome::browser::tab::{RequestInterceptor, RequestPausedDecision};
 use headless_chrome::browser::transport::{SessionId, Transport};
 use headless_chrome::protocol::cdp::Fetch::events::RequestPausedEvent;
-use headless_chrome::protocol::cdp::Network::{GetResponseBody, RequestPattern};
+use headless_chrome::protocol::cdp::Network::GetResponseBody;
 use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
 use maplit::hashmap;
