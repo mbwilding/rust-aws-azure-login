@@ -1,3 +1,6 @@
+mod config;
+mod login;
+
 use anyhow::Result;
 use clap::Parser;
 
@@ -24,15 +27,19 @@ struct Args {
     /// 'gui' performs the login through the Azure GUI;
     /// 'debug' shows the login page but perform the login through the CLI
     #[arg(short, long, default_value = "cli")]
-    mode: String,
+    mode: String, // TODO: implement this
 
     /// Do not prompt for input and accept the default choice
     #[arg(short, long, default_value_t = false)]
     no_prompt: bool,
 
     /// Enables verbose logging to the console
-    #[arg(short, long, default_value_t = true)] // TODO: default_value_t = false
+    #[arg(short, long, default_value_t = cfg!(debug_assertions))]
     verbose: bool,
+
+    /// Additionally returns the JSON credentials to stdout, for consumption by AWS Config [credential_process]
+    #[arg(short, long, default_value_t = false)]
+    json: bool, // TODO: implement this
 }
 
 #[tokio::main]
@@ -47,25 +54,18 @@ async fn main() -> Result<()> {
             .init();
     }
 
-    let profile = if args.profile.is_some() {
+    let profile_name = if args.profile.is_some() {
         args.profile.unwrap()
     } else {
         std::env::var("AWS_PROFILE").unwrap_or("default".to_string())
     };
 
     if args.configure {
-        aws::aws_config::AwsConfig::configure_profile(&profile)?;
+        config::configure_profile(&profile_name)?;
+    } else if args.all_profiles {
+        login::login_profiles(args.force_refresh).await?;
     } else {
-        if args.all_profiles {
-            println!("All profiles");
-            let aws_credentials = web::login::login_all(args.force_refresh, args.no_prompt).await?;
-            println!("{:?}", aws_credentials) // TODO: Testing only
-        } else {
-            println!("Profile: {}", profile);
-            let aws_credential =
-                web::login::login(&profile, args.force_refresh, args.no_prompt).await?;
-            println!("{:?}", aws_credential) // TODO: Testing only
-        }
+        login::login_profile(&profile_name, args.force_refresh, args.no_prompt).await?;
     }
 
     Ok(())

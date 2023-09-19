@@ -8,16 +8,9 @@ use aws_smithy_types::date_time::Format;
 use chrono::Utc;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
-use headless_chrome::browser::tab::{RequestInterceptor, RequestPausedDecision};
-use headless_chrome::browser::transport::{SessionId, Transport};
-use headless_chrome::protocol::cdp::Fetch::events::RequestPausedEvent;
-use headless_chrome::protocol::cdp::Network::GetResponseBody;
 use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
 use maplit::hashmap;
-use scraper::{Html, Selector};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use tracing::debug;
 use uuid::Uuid;
 
@@ -64,15 +57,24 @@ pub async fn login(
     force_refresh: bool,
     no_prompt: bool,
 ) -> Result<AwsCredentials> {
-    let profile = &AwsConfig::profile(profile_name)?;
-
-    // TODO: This will cause an IO write to the creds, even if no change
     if !force_refresh {
-        let credentials = AwsCredentials::profile(profile_name)?;
-        if !credentials.is_profile_about_to_expire() {
-            return Ok(credentials);
+        let config = AwsCredentials::read_config()?;
+        let credentials = config.get(profile_name);
+        if credentials.is_some() && !credentials.unwrap().is_profile_about_to_expire() {
+            return Ok(credentials.unwrap().to_owned()); // TODO: Clean up
         }
     }
+
+    let config = AwsConfig::read_config()?;
+
+    let profile = config.get(profile_name).ok_or_else(|| {
+        anyhow!(
+            "Profile '{}' not found in the AWS config file",
+            profile_name
+        )
+    })?;
+
+    println!("Logging into profile: {}", profile_name);
 
     let saml = perform_login(profile)?;
 
@@ -97,37 +99,13 @@ pub async fn login(
     Ok(credentials)
 }
 
-pub async fn login_all(force_refresh: bool, no_prompt: bool) -> Result<Vec<AwsCredentials>> {
-    let all_profiles = AwsConfig::profiles()?;
-
-    let mut profiles_to_refresh = Vec::new();
-
-    for profile in all_profiles.iter() {
-        let profile_name = profile.0.as_str();
-        let credentials = AwsCredentials::profile(profile_name)?;
-
-        if force_refresh || credentials.is_profile_about_to_expire() {
-            let credentials = login(profile_name, force_refresh, no_prompt).await?;
-            profiles_to_refresh.push(credentials);
-        }
-    }
-
-    Ok(profiles_to_refresh)
-}
-
 fn perform_login(profile: &AwsConfig) -> Result<String> {
     let width = 425;
     let height = 550;
 
-    let path = PathBuf::from(r"C:\Program Files\Google\Chrome\Application\chrome.exe");
-
     let launch_options = LaunchOptions::default_builder()
-        .path(Some(path))
         .headless(false) // TODO: true in production
         .window_size(Some((width, height)))
-        .user_data_dir(Some(PathBuf::from(
-            r"C:\Users\mbwil\AppData\Local\Google\Chrome\User Data",
-        )))
         .build()?;
 
     let browser = Browser::new(launch_options)?;
@@ -138,7 +116,7 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
         height: Some(height - 35),
         browser_context_id: None,
         enable_begin_frame_control: None,
-        new_window: None,
+        new_window: Some(false),
         background: None,
     })?;
 
@@ -215,7 +193,7 @@ fn ask_user_for_role_and_duration(
         }
     } else {
         let selection = Select::new()
-            .with_prompt("Role:")
+            .with_prompt("Role")
             .default(0)
             .items(
                 &roles

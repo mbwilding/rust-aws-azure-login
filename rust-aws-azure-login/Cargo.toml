@@ -18,3 +18,4 @@ tracing-subscriber = "0.3"
 anyhow = "1.0"
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4.4.4", features = ["derive"] }
+dialoguer = "0.10"
