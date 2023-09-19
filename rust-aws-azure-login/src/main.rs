@@ -5,8 +5,8 @@ use clap::Parser;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// The name of the profile to log in with (or configure)
-    #[arg(short, long, default_value = "")]
-    profile: String,
+    #[arg(short, long)]
+    profile: Option<String>,
 
     /// Run for all configured profiles
     #[arg(short, long, default_value_t = false)]
@@ -47,26 +47,23 @@ async fn main() -> Result<()> {
             .init();
     }
 
-    let profile = resolve_profile_name(&args);
-    println!("Profile: {}", profile);
+    let profile = if args.profile.is_some() {
+        args.profile.unwrap()
+    } else {
+        std::env::var("AWS_PROFILE").unwrap_or("default".to_string())
+    };
 
     if args.configure {
         aws::aws_config::AwsConfig::configure_profile(&profile)?;
     } else {
         if args.all_profiles {
+            println!("All profiles");
             web::login::login_all(args.force_refresh, args.no_prompt).await?;
         } else {
+            println!("Profile: {}", profile);
             web::login::login(&profile, args.force_refresh, args.no_prompt).await?;
         }
     }
 
     Ok(())
-}
-
-fn resolve_profile_name(args: &Args) -> String {
-    if !args.profile.is_empty() {
-        args.profile.clone()
-    } else {
-        std::env::var("AWS_PROFILE").unwrap_or("default".to_string())
-    }
 }
