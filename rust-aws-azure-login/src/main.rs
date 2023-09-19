@@ -1,4 +1,5 @@
 use anyhow::Result;
+use aws::aws_credentials::AwsCredentials;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -58,10 +59,13 @@ async fn main() -> Result<()> {
     } else {
         if args.all_profiles {
             println!("All profiles");
-            web::login::login_all(args.force_refresh, args.no_prompt).await?;
+            let aws_credentials = web::login::login_all(args.force_refresh, args.no_prompt).await?;
+            println!("{:?}", aws_credentials) // TODO: Testing only
         } else {
             println!("Profile: {}", profile);
-            web::login::login(&profile, args.force_refresh, args.no_prompt).await?;
+            let aws_credential =
+                web::login::login(&profile, args.force_refresh, args.no_prompt).await?;
+            println!("{:?}", aws_credential) // TODO: Testing only
         }
     }
 
