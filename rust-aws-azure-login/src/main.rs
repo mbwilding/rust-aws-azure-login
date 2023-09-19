@@ -25,7 +25,7 @@ struct Args {
     mode: String,
 
     /// Do not prompt for input and accept the default choice
-    #[arg(short, long)]
+    #[arg(short, long, default_value_t = false)]
     no_prompt: bool,
 }
 
