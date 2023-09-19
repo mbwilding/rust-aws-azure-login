@@ -1,6 +1,5 @@
 use anyhow::Result;
 use clap::Parser;
-use tracing::info;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -30,26 +29,35 @@ struct Args {
     /// Do not prompt for input and accept the default choice
     #[arg(short, long, default_value_t = false)]
     no_prompt: bool,
+
+    /// Enables verbose logging to the console
+    #[arg(short, long, default_value_t = true)] // TODO: default_value_t = false
+    verbose: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        //.json()
-        .with_max_level(tracing::Level::DEBUG)
-        .with_target(true)
-        .with_line_number(true)
-        .init();
-
     let args = Args::parse();
 
-    let profile = resolve_profile_name(&args);
-    info!("Profile: {}", profile);
+    if args.verbose {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .with_target(true)
+            .with_line_number(true)
+            .init();
+    }
 
-    if args.all_profiles {
-        web::login::login_all(args.force_refresh, args.no_prompt).await?;
+    let profile = resolve_profile_name(&args);
+    println!("Profile: {}", profile);
+
+    if args.configure {
+        aws::aws_config::AwsConfig::configure_profile(&profile)?;
     } else {
-        web::login::login(&profile, args.force_refresh, args.no_prompt).await?;
+        if args.all_profiles {
+            web::login::login_all(args.force_refresh, args.no_prompt).await?;
+        } else {
+            web::login::login(&profile, args.force_refresh, args.no_prompt).await?;
+        }
     }
 
     Ok(())

@@ -1,34 +1,15 @@
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use directories::UserDirs;
-use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug)]
 pub struct AwsCredentials {
-    #[serde(skip)]
     pub profile_name: Option<String>,
     pub aws_access_key_id: Option<String>,
     pub aws_secret_access_key: Option<String>,
     pub aws_session_token: Option<String>,
-    #[serde(serialize_with = "serialize_datetime_with_ms")]
     pub aws_expiration: Option<DateTime<Utc>>,
-}
-
-fn serialize_datetime_with_ms<S>(
-    dt: &Option<DateTime<Utc>>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match dt {
-        Some(actual_dt) => {
-            let str_dt = actual_dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-            serializer.serialize_str(&str_dt)
-        }
-        None => serializer.serialize_none(),
-    }
 }
 
 impl AwsCredentials {
@@ -126,5 +107,17 @@ impl AwsCredentials {
             }
             None => true,
         }
+    }
+
+    pub fn set_profile_credentials(profile_name: &str, profile: AwsCredentials) -> Result<()> {
+        let aws_expiration = profile
+            .aws_expiration
+            .unwrap()
+            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+            .to_string();
+
+        // TODO: Find a library that can write INI files
+
+        Ok(())
     }
 }

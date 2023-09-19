@@ -6,6 +6,7 @@ use aws::aws_credentials::AwsCredentials;
 use aws_sdk_sts::config::Region;
 use aws_smithy_types::date_time::Format;
 use chrono::Utc;
+use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
 use headless_chrome::browser::tab::{RequestInterceptor, RequestPausedDecision};
 use headless_chrome::browser::transport::{SessionId, Transport};
@@ -230,19 +231,20 @@ fn ask_user_for_role_and_duration(
     };
 
     if !no_prompt || default_duration_hours.is_none() {
-        let duration_input: String = Input::new()
-            .with_prompt("Session Duration Hours (up to 12)")
-            .default(default_duration_hours.map_or(String::new(), |x| x.to_string()))
-            .validate_with(|input: &String| {
-                match input.parse::<u8>() {
-                    // Parsing the input string to u8
-                    Ok(n) if n > 0 && n <= 12 => Ok(()),
-                    _ => Err("Duration hours must be between 0 and 12".to_string()),
-                }
-            })
-            .interact()?;
+        duration_hours = loop {
+            let input: String = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("Default Session Duration Hours (up to 12)")
+                .default(default_duration_hours.map_or(String::new(), |x| x.to_string()))
+                .allow_empty(true)
+                .interact_text()
+                .unwrap();
 
-        duration_hours = duration_input.parse()?;
+            if let Ok(value) = input.parse::<u8>() {
+                if value > 0 && value <= 12 {
+                    break value;
+                }
+            }
+        };
     }
 
     Ok((selected_role, duration_hours))

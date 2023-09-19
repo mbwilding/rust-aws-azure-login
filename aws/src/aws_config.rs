@@ -1,10 +1,9 @@
 ﻿use anyhow::{anyhow, Result};
 use dialoguer::{theme::ColorfulTheme, Confirm, Input};
 use directories::UserDirs;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug)]
 pub struct AwsConfig {
     pub azure_tenant_id: Option<String>,
     pub azure_app_id_uri: Option<String>,
@@ -129,7 +128,7 @@ impl AwsConfig {
         })
     }
 
-    fn configure_profile(profile_name: &str) -> Result<()> {
+    pub fn configure_profile(profile_name: &str) -> Result<()> {
         let mut profile = AwsConfig::profile(profile_name)?;
 
         let azure_tenant_id: String = Input::with_theme(&ColorfulTheme::default())

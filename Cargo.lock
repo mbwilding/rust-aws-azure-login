@@ -147,7 +147,6 @@ dependencies = [
  "dialoguer",
  "directories 5.0.1",
  "ini",
- "serde",
  "tracing",
 ]
 
@@ -1872,8 +1871,6 @@ dependencies = [
  "anyhow",
  "aws",
  "clap",
- "serde",
- "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
