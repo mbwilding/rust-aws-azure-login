@@ -33,13 +33,13 @@ struct Args {
     #[arg(short, long, default_value_t = false)]
     no_prompt: bool,
 
-    /// Enables verbose logging to the console
-    #[arg(short, long, default_value_t = cfg!(debug_assertions))]
-    verbose: bool,
-
     /// Additionally returns the JSON credentials to stdout, for consumption by AWS Config [credential_process]
     #[arg(short, long, default_value_t = false)]
     json: bool, // TODO: implement this
+
+    /// Enables verbose logging to the console
+    #[arg(short, long, default_value_t = cfg!(debug_assertions))]
+    verbose: bool,
 }
 
 #[tokio::main]
@@ -54,11 +54,9 @@ async fn main() -> Result<()> {
             .init();
     }
 
-    let profile_name = if args.profile.is_some() {
-        args.profile.unwrap()
-    } else {
-        std::env::var("AWS_PROFILE").unwrap_or("default".to_string())
-    };
+    let profile_name = args
+        .profile
+        .unwrap_or_else(|| std::env::var("AWS_PROFILE").unwrap_or("default".to_string()));
 
     if args.configure {
         config::configure_profile(&profile_name)?;

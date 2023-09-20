@@ -1,4 +1,4 @@
-use crate::helpers::{base64_url_encode, compress_and_encode};
+use crate::helpers::{base64_decode_to_string, base64_url_encode, compress_and_encode};
 use crate::saml_response::{parse_roles_from_saml_response, Role};
 use anyhow::{anyhow, bail, Result};
 use aws::aws_config::AwsConfig;
@@ -8,8 +8,12 @@ use aws_smithy_types::date_time::Format;
 use chrono::Utc;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
+use directories::UserDirs;
+use headless_chrome::protocol::cdp::Network::events::ResponseReceivedEventParams;
+use headless_chrome::protocol::cdp::Network::{GetResponseBodyReturnObject, ResourceType};
 use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
+use log::error;
 use maplit::hashmap;
 use tracing::debug;
 use uuid::Uuid;
@@ -58,16 +62,24 @@ pub async fn login(
     no_prompt: bool,
 ) -> Result<AwsCredentials> {
     if !force_refresh {
-        let config = AwsCredentials::read_config()?;
-        let credentials = config.get(profile_name);
-        if credentials.is_some() && !credentials.unwrap().is_profile_about_to_expire() {
-            return Ok(credentials.unwrap().to_owned()); // TODO: Clean up
+        let credentials = AwsCredentials::read_credentials().unwrap_or_default();
+        if !credentials.is_empty() {
+            let credential = credentials.get(profile_name);
+            if credential.is_some() && !credential.unwrap().is_profile_about_to_expire() {
+                return Ok(credential.unwrap().to_owned()); // TODO: Clean up
+            }
         }
     }
 
     let config = AwsConfig::read_config()?;
 
-    let profile = config.get(profile_name).ok_or_else(|| {
+    let profile_name_fixed = if profile_name != "default" && !profile_name.starts_with("profile ") {
+        format!("profile {}", profile_name)
+    } else {
+        profile_name.to_string()
+    };
+
+    let profile = config.get(&profile_name_fixed).ok_or_else(|| {
         anyhow!(
             "Profile '{}' not found in the AWS config file",
             profile_name
@@ -90,7 +102,7 @@ pub async fn login(
     let credentials = assume_role(
         profile_name,
         &saml,
-        role,
+        &role,
         duration_hours,
         profile.region.to_owned(),
     )
@@ -103,15 +115,23 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
     let width = 425;
     let height = 550;
 
+    let storage = match UserDirs::new() {
+        Some(user_dirs) => user_dirs.home_dir().join(".rust-aws-azure-login"),
+        None => Err(anyhow!("Unable to get user directories"))?,
+    };
+
     let launch_options = LaunchOptions::default_builder()
         .headless(false) // TODO: true in production
         .window_size(Some((width, height)))
+        .user_data_dir(Some(storage))
         .build()?;
 
     let browser = Browser::new(launch_options)?;
 
+    let azure_url = create_login_url(profile)?;
+
     let tab = browser.new_tab_with_options(CreateTarget {
-        url: create_login_url(profile)?,
+        url: azure_url.clone(),
         width: Some(width - 15),
         height: Some(height - 35),
         browser_context_id: None,
@@ -124,7 +144,18 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
         "Accept-Language" => "en"
     })?;
 
-    tab.set_default_timeout(std::time::Duration::from_secs(10));
+    tab.set_default_timeout(std::time::Duration::from_secs(100));
+
+    // let filters = Filters {
+    //     urls: vec![azure_url, "amazon".to_string()],
+    // };
+
+    // tab.register_response_handling(
+    //     "saml",
+    //     Box::new(move |params, get_response_body| {
+    //         handler(params, get_response_body, &filters);
+    //     }),
+    // )?;
 
     if false {
         // Username
@@ -163,10 +194,69 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
         debug!("Finished");
     }
 
+    // let euiueieuioeu = tab.wait_for_element("euiueieuieu")?;
+
     let saml_response = tab.wait_for_element("form#saml_form > input[name=SAMLResponse]")?;
     let saml = saml_response.get_attribute_value("value")?.unwrap();
 
     Ok(saml)
+}
+
+fn handler(
+    params: ResponseReceivedEventParams,
+    get_response_body: &dyn Fn() -> Result<GetResponseBodyReturnObject>,
+    filters: &Filters,
+) {
+    //if !filters.pass(&params.response.url, &params.Type) {
+    //    return;
+    //}
+
+    if let Ok(body) = get_response_body() {
+        if body.base_64_encoded {
+            error!(
+                "URL: {} | {}",
+                params.response.url,
+                base64_decode_to_string(&body.body).unwrap_or("Decode failed".to_string())
+            );
+        } else {
+            error!("URL: {} | {}", params.response.url, body.body);
+        }
+    } else {
+        error!("Couldn't read response body for {}", params.response.url,);
+    }
+}
+
+struct Filters {
+    urls: Vec<String>,
+}
+
+impl Filters {
+    fn pass(&self, url: &str, resource_type: &ResourceType) -> bool {
+        // let url_matched = self.urls.iter().any(|x| url.contains(x));
+
+        let res_type = match resource_type {
+            ResourceType::Document => true,
+            ResourceType::Stylesheet => false,
+            ResourceType::Image => false,
+            ResourceType::Media => false,
+            ResourceType::Font => false,
+            ResourceType::Script => false,
+            ResourceType::TextTrack => false,
+            ResourceType::Xhr => false,
+            ResourceType::Fetch => false,
+            ResourceType::EventSource => false,
+            ResourceType::WebSocket => false,
+            ResourceType::Manifest => false,
+            ResourceType::SignedExchange => false,
+            ResourceType::Ping => false,
+            ResourceType::CspViolationReport => false,
+            ResourceType::Preflight => false,
+            ResourceType::Other => false,
+        };
+
+        // url_matched && res_type
+        res_type
+    }
 }
 
 fn ask_user_for_role_and_duration(
@@ -230,17 +320,18 @@ fn ask_user_for_role_and_duration(
 async fn assume_role(
     profile_name: &str,
     assertion: &str,
-    role: Role,
+    role: &Role,
     duration_hours: u8,
     region: Option<String>,
 ) -> Result<AwsCredentials> {
     let config = if let Some(region_str) = region {
         aws_config::from_env()
             .region(Region::new(region_str))
+            .no_credentials()
             .load()
             .await
     } else {
-        aws_config::from_env().load().await
+        aws_config::from_env().no_credentials().load().await
     };
 
     let sts_client = aws_sdk_sts::Client::new(&config);
@@ -249,14 +340,14 @@ async fn assume_role(
 
     let assume_role_request = sts_client
         .assume_role_with_saml()
-        .role_arn(role.role_arn)
-        .principal_arn(role.principal_arn)
+        .role_arn(&role.role_arn)
+        .principal_arn(&role.principal_arn)
         .saml_assertion(assertion)
         .duration_seconds(duration_seconds);
 
-    let assume_role_output = assume_role_request.send().await?;
+    let assume_role_response = assume_role_request.send().await?;
 
-    let credentials = assume_role_output
+    let credentials = assume_role_response
         .credentials
         .ok_or(anyhow!("No credentials found in assume role response"))?;
 

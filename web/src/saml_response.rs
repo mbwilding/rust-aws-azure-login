@@ -6,33 +6,40 @@ use crate::helpers::base64_decode_to_string;
 use anyhow::{bail, Result};
 use serde::Deserialize;
 use serde_xml_rs::from_str;
+use std::fmt::Display;
 use std::str;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Role {
     pub role_arn: String,
     pub principal_arn: String,
 }
 
-#[derive(Debug, Deserialize)]
+impl Display for Role {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ({})", self.role_arn, self.principal_arn)
+    }
+}
+
+#[derive(Deserialize, Debug)]
 struct SamlResponse {
     #[serde(rename = "Assertion")]
     assertion: Assertion,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Assertion {
     #[serde(rename = "AttributeStatement")]
     attribute_statement: AttributeStatement,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize, Debug)]
 struct AttributeStatement {
     #[serde(rename = "Attribute")]
     attribute: Vec<Attribute>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Attribute {
     #[serde(rename = "Name")]
     name: String,
@@ -40,7 +47,7 @@ struct Attribute {
     attribute_value: Vec<AttributeValue>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize, Debug)]
 struct AttributeValue {
     #[serde(rename = "$value")]
     value: String,

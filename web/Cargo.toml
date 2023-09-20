@@ -14,16 +14,13 @@ flate2 = "1.0"
 base64 = "0.21"
 url = "2.4"
 maplit = "1.0"
-headless_chrome = {git = "https://github.com/atroche/rust-headless-chrome", features = ["fetch"]}
+headless_chrome = { git = "https://github.com/atroche/rust-headless-chrome", features = ["fetch"] }
 log = "0.4.20"
 serde = { version = "1.0", features = ["derive"] }
 serde-xml-rs = "0.6"
 dialoguer = "0.10"
-scraper = "0.17"
+directories = "5.0"
 aws-sdk-sts = "0.30"
 aws-config = "0.56"
 aws-credential-types = "0.56"
-aws_auth = "0.1.0"
-aws-types = "0.56"
 aws-smithy-types = "0.56"
-directories = "5.0"

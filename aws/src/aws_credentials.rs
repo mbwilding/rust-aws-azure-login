@@ -1,10 +1,11 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use chrono::{DateTime, Utc};
 use directories::UserDirs;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AwsCredentials {
@@ -41,25 +42,18 @@ where
 }
 
 impl AwsCredentials {
-    fn get_credentials_path() -> Result<String> {
+    fn get_credentials_path() -> Result<PathBuf> {
         match UserDirs::new() {
-            Some(user_dirs) => {
-                let credentials_path = user_dirs.home_dir().join(".aws/credentials");
-                if credentials_path.exists() {
-                    credentials_path
-                        .to_str()
-                        .map(|s| s.to_owned())
-                        .ok_or_else(|| anyhow!("Path contains invalid Unicode"))
-                } else {
-                    Err(anyhow!("AWS credentials file not found"))
-                }
-            }
+            Some(user_dirs) => Ok(user_dirs.home_dir().join(".aws/credentials")),
             None => Err(anyhow!("Unable to get user directories")),
         }
     }
 
-    pub fn read_config() -> Result<HashMap<String, AwsCredentials>> {
+    pub fn read_credentials() -> Result<HashMap<String, AwsCredentials>> {
         let credentials_path = Self::get_credentials_path()?;
+        if !credentials_path.exists() {
+            bail!("AWS credentials file not found")
+        }
         let file = File::open(credentials_path)?;
         let reader = BufReader::new(file);
         let aws_credentials: HashMap<String, AwsCredentials> = serde_ini::from_bufread(reader)?;
@@ -67,7 +61,7 @@ impl AwsCredentials {
         Ok(aws_credentials)
     }
 
-    pub fn write_config(profiles: &HashMap<String, AwsCredentials>) -> Result<()> {
+    pub fn write_credentials(profiles: &HashMap<String, AwsCredentials>) -> Result<()> {
         let credentials_path = Self::get_credentials_path()?;
         let file = File::create(credentials_path)?;
         let writer = BufWriter::new(file);

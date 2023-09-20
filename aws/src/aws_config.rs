@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AwsConfig {
@@ -51,15 +52,12 @@ impl Default for AwsConfig {
 }
 
 impl AwsConfig {
-    fn get_config_path() -> Result<String> {
+    fn get_config_path() -> Result<PathBuf> {
         match UserDirs::new() {
             Some(user_dirs) => {
-                let credentials_path = user_dirs.home_dir().join(".aws/config");
-                if credentials_path.exists() {
-                    credentials_path
-                        .to_str()
-                        .map(|s| s.to_owned())
-                        .ok_or_else(|| anyhow!("Path contains invalid Unicode"))
+                let config_path = user_dirs.home_dir().join(".aws/config");
+                if config_path.exists() {
+                    Ok(config_path)
                 } else {
                     Err(anyhow!("AWS config file not found"))
                 }
