@@ -2,7 +2,7 @@
 name = "aws"
 version = "0.1.0"
 edition = "2021"
-authors = ["Matt Wilding <tabmaw@rwwa.com.au>"]
+authors = ["Matthew Wilding <matt@wildingstudios.com>"]
 
 [dependencies]
 tracing = "0.1"

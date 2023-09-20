@@ -15,7 +15,7 @@ use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
 use log::error;
 use maplit::hashmap;
-use std::ops::Deref;
+use shared::args::Args;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -61,6 +61,7 @@ pub async fn login(
     profile_name: &str,
     force_refresh: bool,
     no_prompt: bool,
+    args: &Args,
 ) -> Result<AwsCredentials> {
     if !force_refresh {
         let credentials = AwsCredentials::read_credentials().unwrap_or_default();
@@ -89,7 +90,7 @@ pub async fn login(
 
     println!("Logging into profile: {}", profile_name);
 
-    let saml = perform_login(profile)?;
+    let saml = perform_login(profile, args)?;
 
     let roles = parse_roles_from_saml_response(&saml)?;
 
@@ -112,7 +113,7 @@ pub async fn login(
     Ok(credentials)
 }
 
-fn perform_login(profile: &AwsConfig) -> Result<String> {
+fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
     let width = 425;
     let height = 550;
 
@@ -120,6 +121,7 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
 
     launch_options
         .headless(false) // TODO: true in production
+        .sandbox(args.sandbox)
         .window_size(Some((width, height)));
 
     if profile.azure_default_remember_me == Some(true) {

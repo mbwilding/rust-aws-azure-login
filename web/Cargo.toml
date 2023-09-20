@@ -2,9 +2,10 @@
 name = "web"
 version = "0.1.0"
 edition = "2021"
-authors = ["Matt Wilding <tabmaw@rwwa.com.au>"]
+authors = ["Matthew Wilding <matt@wildingstudios.com>"]
 
 [dependencies]
+shared = { path = "../shared" }
 aws = { path = "../aws" }
 tracing = "0.1"
 anyhow = "1.0"

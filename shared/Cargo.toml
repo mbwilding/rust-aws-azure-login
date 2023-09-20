@@ -1,0 +1,8 @@
+[package]
+name = "shared"
+version = "0.1.0"
+edition = "2021"
+authors = ["Matthew Wilding <matt@wildingstudios.com>"]
+
+[dependencies]
+clap = { version = "4.4.4", features = ["derive"] }
