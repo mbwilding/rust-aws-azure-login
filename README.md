@@ -1,6 +1,6 @@
 # rust-aws-azure-login
 
-> Work in progress but mostly working
+> Work in progress, will be ready for production use in October 2023
 
 This project is a Rust-based rewrite of the JavaScript [`aws-azure-login`](https://github.com/aws-azure-login/aws-azure-login) utility.
 
