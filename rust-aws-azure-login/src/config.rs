@@ -67,7 +67,7 @@ pub fn configure_profile(profile_name: &str) -> Result<()> {
         }
     };
 
-    let azure_default_remember_me: Option<String> = Input::with_theme(&ColorfulTheme::default())
+    let azure_default_remember_me: Option<bool> = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Remember Me")
         .default(profile.azure_default_remember_me.unwrap_or_default())
         .allow_empty(true)

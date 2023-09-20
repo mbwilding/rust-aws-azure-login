@@ -122,7 +122,7 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
         .headless(false) // TODO: true in production
         .window_size(Some((width, height)));
 
-    if profile.azure_default_remember_me == Some("true".to_string()) {
+    if profile.azure_default_remember_me == Some(true) {
         let user_data_path = match UserDirs::new() {
             Some(user_dirs) => user_dirs.home_dir().join(".aws").join("chromium"),
             None => Err(anyhow!("Unable to get user directories"))?,

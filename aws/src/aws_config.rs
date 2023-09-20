@@ -1,6 +1,6 @@
 ﻿use anyhow::{anyhow, Result};
 use directories::UserDirs;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
@@ -21,8 +21,13 @@ pub struct AwsConfig {
     pub azure_default_role_arn: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub azure_default_duration_hours: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub azure_default_remember_me: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_bool_to_string",
+        deserialize_with = "deserialize_string_to_bool"
+    )]
+    pub azure_default_remember_me: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub region: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -31,6 +36,30 @@ pub struct AwsConfig {
     pub okta_default_password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub credential_process: Option<String>,
+}
+
+fn serialize_bool_to_string<S>(value: &Option<bool>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        Some(true) => serializer.serialize_str("true"),
+        Some(false) => serializer.serialize_str("false"),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_string_to_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = Option::<String>::deserialize(deserializer)?;
+    match s {
+        Some(ref value) if value == "true" => Ok(Some(true)),
+        Some(ref value) if value == "false" => Ok(Some(false)),
+        Some(_) => Err(de::Error::custom("expected true or false as string")),
+        None => Ok(None),
+    }
 }
 
 impl Default for AwsConfig {
@@ -42,7 +71,7 @@ impl Default for AwsConfig {
             azure_default_password: None,
             azure_default_role_arn: None,
             azure_default_duration_hours: None,
-            azure_default_remember_me: Some("true".to_owned()),
+            azure_default_remember_me: None,
             region: None,
             okta_default_username: None,
             okta_default_password: None,
