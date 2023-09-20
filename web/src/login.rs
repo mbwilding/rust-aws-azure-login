@@ -15,6 +15,7 @@ use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
 use log::error;
 use maplit::hashmap;
+use std::ops::Deref;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -115,18 +116,22 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
     let width = 425;
     let height = 550;
 
-    let storage = match UserDirs::new() {
-        Some(user_dirs) => user_dirs.home_dir().join(".rust-aws-azure-login"),
-        None => Err(anyhow!("Unable to get user directories"))?,
-    };
+    let mut launch_options = LaunchOptions::default_builder();
 
-    let launch_options = LaunchOptions::default_builder()
+    launch_options
         .headless(false) // TODO: true in production
-        .window_size(Some((width, height)))
-        .user_data_dir(Some(storage))
-        .build()?;
+        .window_size(Some((width, height)));
 
-    let browser = Browser::new(launch_options)?;
+    if profile.azure_default_remember_me == Some("true".to_string()) {
+        let user_data_path = match UserDirs::new() {
+            Some(user_dirs) => user_dirs.home_dir().join(".aws").join("chromium"),
+            None => Err(anyhow!("Unable to get user directories"))?,
+        };
+        launch_options.user_data_dir(Some(user_data_path));
+    }
+
+    let launch_options_built = launch_options.build()?;
+    let browser = Browser::new(launch_options_built)?;
 
     let azure_url = create_login_url(profile)?;
 
@@ -193,8 +198,6 @@ fn perform_login(profile: &AwsConfig) -> Result<String> {
 
         debug!("Finished");
     }
-
-    // let euiueieuioeu = tab.wait_for_element("euiueieuieu")?;
 
     let saml_response = tab.wait_for_element("form#saml_form > input[name=SAMLResponse]")?;
     let saml = saml_response.get_attribute_value("value")?.unwrap();
