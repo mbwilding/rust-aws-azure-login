@@ -126,7 +126,7 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
 
     if profile.azure_default_remember_me == Some(true) {
         let user_data_path = match UserDirs::new() {
-            Some(user_dirs) => user_dirs.home_dir().join(".aws").join("chromium"),
+            Some(user_dirs) => user_dirs.home_dir().join(".aws/chromium"),
             None => Err(anyhow!("Unable to get user directories"))?,
         };
         launch_options.user_data_dir(Some(user_data_path));

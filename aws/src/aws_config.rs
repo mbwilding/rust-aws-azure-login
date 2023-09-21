@@ -65,7 +65,9 @@ impl AwsConfig {
                 if config_path.exists() {
                     Ok(config_path)
                 } else {
-                    Err(anyhow!("AWS config file not found"))
+                    Err(anyhow!(
+                        "AWS config file not found, please run with --configure"
+                    ))
                 }
             }
             None => Err(anyhow!("Unable to get user directories")),
