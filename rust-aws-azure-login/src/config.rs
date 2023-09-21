@@ -5,11 +5,11 @@ use dialoguer::Input;
 
 pub fn configure_profile(profile_name: &str) -> Result<()> {
     let mut config = AwsConfig::read_config()?;
-    let profile = config
-        .get(profile_name)
-        .ok_or_else(AwsConfig::default)
-        .unwrap()
-        .clone();
+
+    let profile = match config.get(profile_name) {
+        Some(profile) => profile.clone(),
+        None => AwsConfig::default(),
+    };
 
     let azure_tenant_id: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Azure Tenant ID")

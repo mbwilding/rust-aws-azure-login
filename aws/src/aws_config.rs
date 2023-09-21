@@ -43,13 +43,13 @@ impl Default for AwsConfig {
     fn default() -> Self {
         Self {
             azure_tenant_id: None,
-            azure_app_id_uri: None,
+            azure_app_id_uri: Some("https://signin.aws.amazon.com/saml".to_string()),
             azure_default_username: None,
             azure_default_password: None,
             azure_default_role_arn: None,
-            azure_default_duration_hours: None,
-            azure_default_remember_me: None,
-            region: None,
+            azure_default_duration_hours: Some(8),
+            azure_default_remember_me: Some(true),
+            region: Some("ap-southeast-2".to_string()),
             okta_default_username: None,
             okta_default_password: None,
             credential_process: None,
