@@ -23,11 +23,11 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|| std::env::var("AWS_PROFILE").unwrap_or("default".to_string()));
 
     if args.configure {
-        let mut configs = AwsConfig::read_file()?;
+        let mut configs = AwsConfig::read_file().unwrap_or_default();
         config::configure_profile(&mut configs, &profile_name)?;
     }
 
-    let configs = AwsConfig::read_file().unwrap_or_default();
+    let configs = AwsConfig::read_file()?;
     let mut credentials = AwsCredentials::read_file().unwrap_or_default();
 
     if args.all {
