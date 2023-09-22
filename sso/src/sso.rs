@@ -1,4 +1,5 @@
-use crate::helpers::{base64_decode_to_string, base64_url_encode, compress_and_encode};
+use crate::filter::{handler, Filters};
+use crate::helpers::{base64_url_encode, compress_and_encode};
 use crate::saml_response::{parse_roles_from_saml_response, Role};
 use anyhow::{anyhow, bail, Result};
 use aws_sdk_sts::config::Region;
@@ -9,11 +10,8 @@ use dialoguer::{Input, Select};
 use directories::UserDirs;
 use file_manager::aws_config::AwsConfig;
 use file_manager::aws_credentials::AwsCredentials;
-use headless_chrome::protocol::cdp::Network::events::ResponseReceivedEventParams;
-use headless_chrome::protocol::cdp::Network::{GetResponseBodyReturnObject, ResourceType};
 use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
-use log::error;
 use maplit::hashmap;
 use shared::args::Args;
 use std::collections::HashMap;
@@ -143,18 +141,19 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
 
     tab.set_default_timeout(std::time::Duration::from_secs(100));
 
-    // let filters = Filters {
-    //     urls: vec![azure_url, "amazon".to_string()],
-    // };
-
-    // tab.register_response_handling(
-    //     "saml",
-    //     Box::new(move |params, get_response_body| {
-    //         handler(params, get_response_body, &filters);
-    //     }),
-    // )?;
-
+    // TODO: Cover all login cases and fix response handling
     if false {
+        let filters = Filters {
+            urls: vec![azure_url, "amazon".to_string()],
+        };
+
+        tab.register_response_handling(
+            "saml",
+            Box::new(move |params, get_response_body| {
+                handler(params, get_response_body, &filters);
+            }),
+        )?;
+
         // Username
         debug!("Waiting for sign in page to load");
         tab.wait_until_navigated()?;
@@ -195,63 +194,6 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
     let saml = saml_response.get_attribute_value("value")?.unwrap();
 
     Ok(saml)
-}
-
-fn handler(
-    params: ResponseReceivedEventParams,
-    get_response_body: &dyn Fn() -> Result<GetResponseBodyReturnObject>,
-    filters: &Filters,
-) {
-    //if !filters.pass(&params.response.url, &params.Type) {
-    //    return;
-    //}
-
-    if let Ok(body) = get_response_body() {
-        if body.base_64_encoded {
-            error!(
-                "URL: {} | {}",
-                params.response.url,
-                base64_decode_to_string(&body.body).unwrap_or("Decode failed".to_string())
-            );
-        } else {
-            error!("URL: {} | {}", params.response.url, body.body);
-        }
-    } else {
-        error!("Couldn't read response body for {}", params.response.url,);
-    }
-}
-
-struct Filters {
-    urls: Vec<String>,
-}
-
-impl Filters {
-    fn pass(&self, url: &str, resource_type: &ResourceType) -> bool {
-        // let url_matched = self.urls.iter().any(|x| url.contains(x));
-
-        let res_type = match resource_type {
-            ResourceType::Document => true,
-            ResourceType::Stylesheet => false,
-            ResourceType::Image => false,
-            ResourceType::Media => false,
-            ResourceType::Font => false,
-            ResourceType::Script => false,
-            ResourceType::TextTrack => false,
-            ResourceType::Xhr => false,
-            ResourceType::Fetch => false,
-            ResourceType::EventSource => false,
-            ResourceType::WebSocket => false,
-            ResourceType::Manifest => false,
-            ResourceType::SignedExchange => false,
-            ResourceType::Ping => false,
-            ResourceType::CspViolationReport => false,
-            ResourceType::Preflight => false,
-            ResourceType::Other => false,
-        };
-
-        // url_matched && res_type
-        res_type
-    }
 }
 
 fn ask_user_for_role_and_duration(

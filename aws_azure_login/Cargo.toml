@@ -13,7 +13,7 @@ opt-level = 3
 [dependencies]
 shared = { path = "../shared" }
 file_manager = { path = "../file_manager" }
-web = { path = "../web" }
+sso = { path = "../sso" }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 anyhow = "1.0"

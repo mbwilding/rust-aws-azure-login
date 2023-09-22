@@ -3,6 +3,6 @@ resolver = "2"
 members = [
     "aws_azure_login",
     "file_manager",
-    "web",
     "shared",
+    "sso",
 ]

@@ -135,10 +135,10 @@ dependencies = [
  "dialoguer",
  "file_manager",
  "shared",
+ "sso",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "web",
 ]
 
 [[package]]
@@ -1950,6 +1950,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
+name = "sso"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "aws-credential-types",
+ "aws-sdk-sts",
+ "aws-smithy-types",
+ "base64 0.21.4",
+ "chrono",
+ "dialoguer",
+ "directories 5.0.1",
+ "file_manager",
+ "flate2",
+ "headless_chrome",
+ "log",
+ "maplit",
+ "serde",
+ "serde-xml-rs",
+ "shared",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2441,32 +2467,6 @@ name = "wasm-bindgen-shared"
 version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca6ad05a4870b2bf5fe995117d3728437bd27d7cd5f06f13c17443ef369775a1"
-
-[[package]]
-name = "web"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-config",
- "aws-credential-types",
- "aws-sdk-sts",
- "aws-smithy-types",
- "base64 0.21.4",
- "chrono",
- "dialoguer",
- "directories 5.0.1",
- "file_manager",
- "flate2",
- "headless_chrome",
- "log",
- "maplit",
- "serde",
- "serde-xml-rs",
- "shared",
- "tracing",
- "url",
- "uuid",
-]
 
 [[package]]
 name = "web-sys"

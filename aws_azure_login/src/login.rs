@@ -66,7 +66,7 @@ async fn login_internal(
     no_prompt: bool,
     args: &Args,
 ) -> Result<()> {
-    let profile_credentials = web::login::login(
+    let profile_credentials = sso::sso::login(
         configs,
         credentials,
         profile_name,

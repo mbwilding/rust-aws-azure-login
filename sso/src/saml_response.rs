@@ -1,7 +1,3 @@
-extern crate base64;
-extern crate serde;
-extern crate serde_xml_rs;
-
 use crate::helpers::base64_decode_to_string;
 use anyhow::{bail, Result};
 use serde::Deserialize;
