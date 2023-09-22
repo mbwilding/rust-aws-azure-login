@@ -1,5 +1,5 @@
 use crate::filter::{handler, Filters};
-use crate::helpers::{base64_url_encode, compress_and_encode};
+use crate::saml_request::create_login_url;
 use crate::saml_response::{parse_roles_from_saml_response, Role};
 use anyhow::{anyhow, bail, Result};
 use aws_sdk_sts::config::Region;
@@ -16,45 +16,6 @@ use maplit::hashmap;
 use shared::args::Args;
 use std::collections::HashMap;
 use tracing::debug;
-use uuid::Uuid;
-
-fn create_login_url(config: &AwsConfig) -> Result<String> {
-    let assertion_consumer_service_url = match &config.region {
-        Some(r) if r.starts_with("us-gov") => "https://signin.amazonaws-us-gov.com/saml",
-        Some(r) if r.starts_with("cn-") => "https://signin.amazonaws.cn/saml",
-        _ => "https://signin.aws.amazon.com/saml",
-    };
-
-    let saml_request = format!(
-        r#"
-        <samlp:AuthnRequest xmlns="urn:oasis:names:tc:SAML:2.0:metadata" ID="id{}" Version="2.0" IssueInstant="{}" IsPassive="false" AssertionConsumerServiceURL="{}" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
-            <Issuer xmlns="urn:oasis:names:tc:SAML:2.0:assertion">{}</Issuer>
-            <samlp:NameIDPolicy Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"></samlp:NameIDPolicy>
-        </samlp:AuthnRequest>
-        "#,
-        Uuid::new_v4(),
-        Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
-        assertion_consumer_service_url,
-        config
-            .azure_app_id_uri
-            .as_ref()
-            .ok_or(anyhow!("azure_app_id_uri not set"))?,
-    );
-
-    let compressed_bytes = compress_and_encode(&saml_request)?;
-    let saml_base64_encoded = base64_url_encode(&compressed_bytes);
-
-    let url = format!(
-        "https://login.microsoftonline.com/{}/saml2?SAMLRequest={}",
-        config
-            .azure_tenant_id
-            .as_ref()
-            .ok_or(anyhow!("azure_tenant_id not set"))?,
-        saml_base64_encoded
-    );
-
-    Ok(url)
-}
 
 pub async fn login(
     configs: &HashMap<String, AwsConfig>,
@@ -82,7 +43,7 @@ pub async fn login(
 
     let roles = parse_roles_from_saml_response(&saml)?;
 
-    let (role, duration_hours) = ask_user_for_role_and_duration(
+    let (role, duration_hours) = role_and_duration(
         roles,
         no_prompt,
         profile.azure_default_role_arn.clone(),
@@ -196,7 +157,7 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
     Ok(saml)
 }
 
-fn ask_user_for_role_and_duration(
+fn role_and_duration(
     roles: Vec<Role>,
     no_prompt: bool,
     default_role_arn: Option<String>,

@@ -20,7 +20,7 @@ pub async fn login_profiles(
             credentials,
             profile_name,
             force_refresh,
-            true,
+            false,
             args,
         )
         .await
@@ -48,7 +48,7 @@ pub async fn login_profile(
         credentials,
         &profile_name,
         force_refresh,
-        false,
+        true,
         args,
     )
     .await?;
@@ -75,6 +75,7 @@ async fn login_internal(
         args,
     )
     .await?;
+
     AwsCredentials::upsert(profile_name, &profile_credentials, credentials)?;
 
     Ok(())

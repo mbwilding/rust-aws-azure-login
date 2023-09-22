@@ -25,6 +25,7 @@ async fn main() -> anyhow::Result<()> {
     if args.configure {
         let mut configs = AwsConfig::read_file().unwrap_or_default();
         config::configure_profile(&mut configs, &profile_name)?;
+        return Ok(());
     }
 
     let configs = AwsConfig::read_file()?;
