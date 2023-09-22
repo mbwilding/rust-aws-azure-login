@@ -96,7 +96,7 @@ impl AwsConfig {
         let profile_name_sanitized = Self::sanitize_profile_name(profile_name);
         let profile = profiles.get(&profile_name_sanitized).ok_or_else(|| {
             anyhow!(
-                "Profile '{}' not found in the AWS config file",
+                "Profile '{}' not found in the AWS config file, please run with --configure",
                 profile_name
             )
         })?;

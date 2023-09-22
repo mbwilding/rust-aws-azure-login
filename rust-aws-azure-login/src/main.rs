@@ -22,12 +22,15 @@ async fn main() -> anyhow::Result<()> {
         .clone()
         .unwrap_or_else(|| std::env::var("AWS_PROFILE").unwrap_or("default".to_string()));
 
-    let mut configs = AwsConfig::read_file().unwrap_or_default();
+    if args.configure {
+        let mut configs = AwsConfig::read_file()?;
+        config::configure_profile(&mut configs, &profile_name)?;
+    }
+
+    let configs = AwsConfig::read_file().unwrap_or_default();
     let mut credentials = AwsCredentials::read_file().unwrap_or_default();
 
-    if args.configure {
-        config::configure_profile(&mut configs, &profile_name)?;
-    } else if args.all {
+    if args.all {
         login::login_profiles(&configs, &mut credentials, args.force_refresh, &args).await?;
     } else {
         login::login_profile(
