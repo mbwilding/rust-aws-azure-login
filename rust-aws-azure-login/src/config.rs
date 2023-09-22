@@ -2,14 +2,15 @@ use anyhow::Result;
 use aws::aws_config::AwsConfig;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::Input;
+use std::collections::HashMap;
 
-pub fn configure_profile(profile_name: &str) -> Result<()> {
-    let mut config = AwsConfig::read_config()?;
+pub fn configure_profile(
+    profiles: &mut HashMap<String, AwsConfig>,
+    profile_name: &str,
+) -> Result<()> {
+    let profile = AwsConfig::get(profile_name, profiles).unwrap_or_default();
 
-    let profile = match config.get(profile_name) {
-        Some(profile) => profile.clone(),
-        None => AwsConfig::default(),
-    };
+    println!("Configuring profile: {}", profile_name);
 
     let azure_tenant_id: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Azure Tenant ID")
@@ -113,8 +114,8 @@ pub fn configure_profile(profile_name: &str) -> Result<()> {
         credential_process: None,
     };
 
-    config.insert(profile_name.to_owned(), new_profile);
-    AwsConfig::write_config(&config)?;
+    AwsConfig::upsert(profile_name, &new_profile, profiles)?;
+    AwsConfig::write(&profiles)?;
 
     Ok(())
 }

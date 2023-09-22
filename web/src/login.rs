@@ -16,6 +16,7 @@ use headless_chrome::{Browser, LaunchOptions};
 use log::error;
 use maplit::hashmap;
 use shared::args::Args;
+use std::collections::HashMap;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -58,39 +59,28 @@ fn create_login_url(config: &AwsConfig) -> Result<String> {
 }
 
 pub async fn login(
+    configs: &HashMap<String, AwsConfig>,
+    credentials: &mut HashMap<String, AwsCredentials>,
     profile_name: &str,
     force_refresh: bool,
     no_prompt: bool,
     args: &Args,
 ) -> Result<AwsCredentials> {
     if !force_refresh {
-        let credentials = AwsCredentials::read_credentials().unwrap_or_default();
-        if !credentials.is_empty() {
-            let credential = credentials.get(profile_name);
-            if credential.is_some() && !credential.unwrap().is_profile_about_to_expire() {
-                return Ok(credential.unwrap().to_owned()); // TODO: Clean up
+        let credential = AwsCredentials::get(profile_name, credentials);
+        if credential.is_ok() {
+            let credential = credential.unwrap();
+            if !credential.is_profile_about_to_expire() {
+                return Ok(credential);
             }
         }
     }
 
-    let config = AwsConfig::read_config()?;
-
-    let profile_name_fixed = if profile_name != "default" && !profile_name.starts_with("profile ") {
-        format!("profile {}", profile_name)
-    } else {
-        profile_name.to_string()
-    };
-
-    let profile = config.get(&profile_name_fixed).ok_or_else(|| {
-        anyhow!(
-            "Profile '{}' not found in the AWS config file",
-            profile_name
-        )
-    })?;
+    let profile = AwsConfig::get(profile_name, configs)?;
 
     println!("Logging into profile: {}", profile_name);
 
-    let saml = perform_login(profile, args)?;
+    let saml = perform_login(&profile, args)?;
 
     let roles = parse_roles_from_saml_response(&saml)?;
 

@@ -58,7 +58,7 @@ impl Default for AwsConfig {
 }
 
 impl AwsConfig {
-    fn get_config_path() -> Result<PathBuf> {
+    fn file_path() -> Result<PathBuf> {
         match UserDirs::new() {
             Some(user_dirs) => {
                 let config_path = user_dirs.home_dir().join(".aws/config");
@@ -74,8 +74,8 @@ impl AwsConfig {
         }
     }
 
-    pub fn read_config() -> Result<HashMap<String, AwsConfig>> {
-        let credentials_path = Self::get_config_path()?;
+    pub fn read_file() -> Result<HashMap<String, AwsConfig>> {
+        let credentials_path = Self::file_path()?;
         let file = File::open(credentials_path)?;
         let reader = BufReader::new(file);
         let aws_credentials: HashMap<String, AwsConfig> = serde_ini::from_bufread(reader)?;
@@ -83,12 +83,44 @@ impl AwsConfig {
         Ok(aws_credentials)
     }
 
-    pub fn write_config(profiles: &HashMap<String, AwsConfig>) -> Result<()> {
-        let credentials_path = Self::get_config_path()?;
+    pub fn write(profiles: &HashMap<String, AwsConfig>) -> Result<()> {
+        let credentials_path = Self::file_path()?;
         let file = File::create(credentials_path)?;
         let writer = BufWriter::new(file);
         serde_ini::to_writer(writer, profiles)?;
 
         Ok(())
+    }
+
+    pub fn get(profile_name: &str, profiles: &HashMap<String, AwsConfig>) -> Result<AwsConfig> {
+        let profile_name_sanitized = Self::sanitize_profile_name(profile_name);
+        let profile = profiles.get(&profile_name_sanitized).ok_or_else(|| {
+            anyhow!(
+                "Profile '{}' not found in the AWS config file",
+                profile_name
+            )
+        })?;
+
+        Ok(profile.clone())
+    }
+
+    pub fn upsert(
+        profile_name: &str,
+        profile: &AwsConfig,
+        profiles: &mut HashMap<String, AwsConfig>,
+    ) -> Result<()> {
+        let profile_name_sanitized = Self::sanitize_profile_name(profile_name);
+
+        let _ = profiles.insert(profile_name_sanitized, profile.to_owned());
+
+        Ok(())
+    }
+
+    pub fn sanitize_profile_name(profile_name: &str) -> String {
+        if profile_name != "default" && !profile_name.starts_with("profile ") {
+            format!("profile {}", profile_name)
+        } else {
+            profile_name.to_string()
+        }
     }
 }

@@ -42,15 +42,15 @@ where
 }
 
 impl AwsCredentials {
-    fn get_credentials_path() -> Result<PathBuf> {
+    fn file_path() -> Result<PathBuf> {
         match UserDirs::new() {
             Some(user_dirs) => Ok(user_dirs.home_dir().join(".aws/credentials")),
             None => Err(anyhow!("Unable to get user directories")),
         }
     }
 
-    pub fn read_credentials() -> Result<HashMap<String, AwsCredentials>> {
-        let credentials_path = Self::get_credentials_path()?;
+    pub fn read_file() -> Result<HashMap<String, AwsCredentials>> {
+        let credentials_path = Self::file_path()?;
         if !credentials_path.exists() {
             bail!("AWS credentials file not found")
         }
@@ -61,13 +61,24 @@ impl AwsCredentials {
         Ok(aws_credentials)
     }
 
-    pub fn write_credentials(profiles: &HashMap<String, AwsCredentials>) -> Result<()> {
-        let credentials_path = Self::get_credentials_path()?;
+    pub fn write(profiles: &HashMap<String, AwsCredentials>) -> Result<()> {
+        let credentials_path = Self::file_path()?;
         let file = File::create(credentials_path)?;
         let writer = BufWriter::new(file);
         serde_ini::to_writer(writer, profiles)?;
 
         Ok(())
+    }
+
+    pub fn get(profile_name: &str, profiles: &HashMap<String, AwsCredentials>) -> Result<AwsCredentials> {
+        let profile = profiles.get(profile_name).ok_or_else(|| {
+            anyhow!(
+                "Profile '{}' not found in the AWS credentials file",
+                profile_name
+            )
+        })?;
+
+        Ok(profile.clone())
     }
 
     pub fn is_profile_about_to_expire(&self) -> bool {
@@ -78,5 +89,15 @@ impl AwsCredentials {
             }
             None => true,
         }
+    }
+
+    pub fn upsert(
+        profile_name: &str,
+        profile: &AwsCredentials,
+        profiles: &mut HashMap<String, AwsCredentials>,
+    ) -> Result<()> {
+        let _ = profiles.insert(profile_name.to_owned(), profile.to_owned());
+
+        Ok(())
     }
 }
