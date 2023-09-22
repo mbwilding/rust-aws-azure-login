@@ -1,10 +1,12 @@
-﻿use crate::serde_support::{deserialize_string_to_bool, serialize_bool_to_string};
+﻿use crate::serde_support::{
+    deserialize_string_to_bool, serialize_bool_to_string, serialize_ordered,
+};
 use anyhow::{anyhow, Result};
 use directories::UserDirs;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::io::BufReader;
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -66,7 +68,7 @@ impl AwsConfig {
                     Ok(config_path)
                 } else {
                     Err(anyhow!(
-                        "AWS config file not found, please run with --configure"
+                        "AWS config file not found, please run with -c or --configure"
                     ))
                 }
             }
@@ -85,18 +87,14 @@ impl AwsConfig {
 
     pub fn write(profiles: &HashMap<String, AwsConfig>) -> Result<()> {
         let credentials_path = Self::file_path()?;
-        let file = File::create(credentials_path)?;
-        let writer = BufWriter::new(file);
-        serde_ini::to_writer(writer, profiles)?;
-
-        Ok(())
+        serialize_ordered(profiles, credentials_path)
     }
 
     pub fn get(profile_name: &str, profiles: &HashMap<String, AwsConfig>) -> Result<AwsConfig> {
         let profile_name_sanitized = Self::sanitize_profile_name(profile_name);
         let profile = profiles.get(&profile_name_sanitized).ok_or_else(|| {
             anyhow!(
-                "Profile '{}' not found in the AWS config file, please run with --configure",
+                "Profile '{}' not found in the AWS config file, please run with -c or --configure",
                 profile_name
             )
         })?;

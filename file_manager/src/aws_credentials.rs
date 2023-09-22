@@ -1,10 +1,11 @@
+use crate::serde_support::serialize_ordered;
 use anyhow::{anyhow, bail, Result};
 use chrono::{DateTime, Utc};
 use directories::UserDirs;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::io::BufReader;
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -63,14 +64,13 @@ impl AwsCredentials {
 
     pub fn write(profiles: &HashMap<String, AwsCredentials>) -> Result<()> {
         let credentials_path = Self::file_path()?;
-        let file = File::create(credentials_path)?;
-        let writer = BufWriter::new(file);
-        serde_ini::to_writer(writer, profiles)?;
-
-        Ok(())
+        serialize_ordered(profiles, credentials_path)
     }
 
-    pub fn get(profile_name: &str, profiles: &HashMap<String, AwsCredentials>) -> Result<AwsCredentials> {
+    pub fn get(
+        profile_name: &str,
+        profiles: &HashMap<String, AwsCredentials>,
+    ) -> Result<AwsCredentials> {
         let profile = profiles.get(profile_name).ok_or_else(|| {
             anyhow!(
                 "Profile '{}' not found in the AWS credentials file",
