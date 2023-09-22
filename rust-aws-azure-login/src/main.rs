@@ -9,7 +9,7 @@ mod login;
 async fn main() -> anyhow::Result<()> {
     let args = shared::args::Args::parse();
 
-    if args.verbose {
+    if args.debug {
         tracing_subscriber::fmt()
             .with_max_level(tracing::Level::DEBUG)
             .with_target(true)
@@ -38,7 +38,6 @@ async fn main() -> anyhow::Result<()> {
             &mut credentials,
             &profile_name,
             args.force_refresh,
-            args.no_prompt,
             &args,
         )
         .await?;

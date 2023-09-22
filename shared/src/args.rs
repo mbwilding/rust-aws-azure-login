@@ -17,19 +17,15 @@ pub struct Args {
     #[arg(short, long, default_value_t = false)]
     pub configure: bool,
 
-    /// Do not prompt for input and accept the default choice
-    #[arg(short, long, default_value_t = false)]
-    pub no_prompt: bool,
-
     /// Disables the sandbox mode for the browser, linux may require this to be false
     #[arg(short, long, default_value_t = true)]
     pub sandbox: bool,
 
-    /// Enables verbose logging to the console
-    #[arg(short, long, default_value_t = cfg!(debug_assertions))]
-    pub verbose: bool,
-
     /// NOT IMPLEMENTED | Additionally returns the JSON credentials to stdout, for consumption by AWS Config [credential_process]
     #[arg(short, long, default_value_t = false)]
     json: bool, // TODO: implement this
+
+    /// Enables viewing the browser automation and verbose logging to the console
+    #[arg(short, long, default_value_t = cfg!(debug_assertions))]
+    pub debug: bool,
 }

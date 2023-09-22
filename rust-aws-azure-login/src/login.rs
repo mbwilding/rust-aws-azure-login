@@ -23,7 +23,12 @@ pub async fn login_profiles(
             true,
             args,
         )
-        .await?;
+        .await
+        .unwrap_or_else(|e| {
+            let error = format!("Error logging into profile '{}': {}", profile_name, e);
+            tracing::error!("{}", error);
+            println!("{}", error)
+        });
     }
 
     AwsCredentials::write(&credentials)?;
@@ -36,7 +41,6 @@ pub async fn login_profile(
     credentials: &mut HashMap<String, AwsCredentials>,
     profile_name: &str,
     force_refresh: bool,
-    no_prompt: bool,
     args: &Args,
 ) -> Result<()> {
     login_internal(
@@ -44,7 +48,7 @@ pub async fn login_profile(
         credentials,
         &profile_name,
         force_refresh,
-        no_prompt,
+        false,
         args,
     )
     .await?;

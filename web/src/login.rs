@@ -110,7 +110,7 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
     let mut launch_options = LaunchOptions::default_builder();
 
     launch_options
-        .headless(false) // TODO: true in production
+        .headless(!args.debug)
         .sandbox(args.sandbox)
         .window_size(Some((width, height)));
 
