@@ -105,7 +105,7 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
         background: None,
     })?;
 
-    tab.stop_loading()?;
+    tab.stop_loading()?; // TODO: Part 1 for interception hack, if already logged in it doesn't detect the response unless you reload the browser
 
     tab.set_extra_http_headers(hashmap! {
         "Accept-Language" => "en"
@@ -160,7 +160,7 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
         },
     ))?;
 
-    tab.reload(false, None)?;
+    tab.reload(false, None)?; // TODO: Part 2 for interception hack, if already logged in it doesn't detect the response unless you reload the browser
 
     let saml_response = receiver
         .recv()
@@ -169,7 +169,7 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
         .unwrap()
         .to_string();
 
-    let saml_response_decoded: String = form_urlencoded::parse(saml_response.as_bytes())
+    let saml_response_decoded = form_urlencoded::parse(saml_response.as_bytes())
         .map(|(key, _)| key)
         .collect();
 
