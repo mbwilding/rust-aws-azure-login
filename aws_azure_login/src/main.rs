@@ -1,6 +1,6 @@
-use aws::aws_config::AwsConfig;
-use aws::aws_credentials::AwsCredentials;
 use clap::Parser;
+use file_manager::aws_config::AwsConfig;
+use file_manager::aws_credentials::AwsCredentials;
 
 mod config;
 mod login;

@@ -6,7 +6,7 @@ authors = ["Matthew Wilding <matt@wildingstudios.com>"]
 
 [dependencies]
 shared = { path = "../shared" }
-aws = { path = "../aws" }
+file_manager = { path = "../file_manager" }
 tracing = "0.1"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }

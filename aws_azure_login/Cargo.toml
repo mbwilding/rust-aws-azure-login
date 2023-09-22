@@ -1,5 +1,5 @@
 [package]
-name = "rust-aws-azure-login"
+name = "aws-azure-login"
 version = "0.1.0"
 edition = "2021"
 authors = ["Matthew Wilding <matt@wildingstudios.com>"]
@@ -12,7 +12,7 @@ opt-level = 3
 
 [dependencies]
 shared = { path = "../shared" }
-aws = { path = "../aws" }
+file_manager = { path = "../file_manager" }
 web = { path = "../web" }
 tracing = "0.1"
 tracing-subscriber = "0.3"

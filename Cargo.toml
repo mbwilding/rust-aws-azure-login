@@ -1,8 +1,8 @@
 ﻿[workspace]
 resolver = "2"
 members = [
-    "rust-aws-azure-login",
-    "aws",
+    "aws_azure_login",
+    "file_manager",
     "web",
     "shared",
 ]

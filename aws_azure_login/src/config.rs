@@ -1,7 +1,7 @@
 use anyhow::Result;
-use aws::aws_config::AwsConfig;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::Input;
+use file_manager::aws_config::AwsConfig;
 use std::collections::HashMap;
 
 pub fn configure_profile(

@@ -1,14 +1,14 @@
 use crate::helpers::{base64_decode_to_string, base64_url_encode, compress_and_encode};
 use crate::saml_response::{parse_roles_from_saml_response, Role};
 use anyhow::{anyhow, bail, Result};
-use aws::aws_config::AwsConfig;
-use aws::aws_credentials::AwsCredentials;
 use aws_sdk_sts::config::Region;
 use aws_smithy_types::date_time::Format;
 use chrono::Utc;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
 use directories::UserDirs;
+use file_manager::aws_config::AwsConfig;
+use file_manager::aws_credentials::AwsCredentials;
 use headless_chrome::protocol::cdp::Network::events::ResponseReceivedEventParams;
 use headless_chrome::protocol::cdp::Network::{GetResponseBodyReturnObject, ResourceType};
 use headless_chrome::protocol::cdp::Target::CreateTarget;

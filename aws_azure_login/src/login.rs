@@ -1,6 +1,6 @@
 use anyhow::Result;
-use aws::aws_config::AwsConfig;
-use aws::aws_credentials::AwsCredentials;
+use file_manager::aws_config::AwsConfig;
+use file_manager::aws_credentials::AwsCredentials;
 use shared::args::Args;
 use std::collections::HashMap;
 

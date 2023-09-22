@@ -127,15 +127,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
-name = "aws"
+name = "aws-azure-login"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chrono",
- "directories 5.0.1",
- "serde",
- "serde_ini",
+ "clap",
+ "dialoguer",
+ "file_manager",
+ "shared",
+ "tokio",
  "tracing",
+ "tracing-subscriber",
+ "web",
 ]
 
 [[package]]
@@ -912,6 +915,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6999dc1837253364c2ebb0704ba97994bd874e8f195d665c50b7548f6ea92764"
 
 [[package]]
+name = "file_manager"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "directories 5.0.1",
+ "serde",
+ "serde_ini",
+ "tracing",
+]
+
+[[package]]
 name = "flate2"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1623,21 +1638,6 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
-]
-
-[[package]]
-name = "rust-aws-azure-login"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws",
- "clap",
- "dialoguer",
- "shared",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "web",
 ]
 
 [[package]]
@@ -2447,7 +2447,6 @@ name = "web"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws",
  "aws-config",
  "aws-credential-types",
  "aws-sdk-sts",
@@ -2456,6 +2455,7 @@ dependencies = [
  "chrono",
  "dialoguer",
  "directories 5.0.1",
+ "file_manager",
  "flate2",
  "headless_chrome",
  "log",
