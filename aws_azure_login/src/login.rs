@@ -3,6 +3,7 @@ use file_manager::aws_config::AwsConfig;
 use file_manager::aws_credentials::AwsCredentials;
 use shared::args::Args;
 use std::collections::HashMap;
+use tracing::error;
 
 pub async fn login_profiles(
     configs: &HashMap<String, AwsConfig>,
@@ -25,9 +26,7 @@ pub async fn login_profiles(
         )
         .await
         .unwrap_or_else(|e| {
-            let error = format!("Error logging into profile '{}': {}", profile_name, e);
-            tracing::error!("{}", error);
-            println!("{}", error)
+            error!("Error logging into profile '{}': {}", profile_name, e);
         });
     }
 

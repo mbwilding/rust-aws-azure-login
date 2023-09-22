@@ -1,10 +1,11 @@
-use crate::aws_config::AwsConfig;
 use anyhow::Result;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
+use tracing::info;
 
 pub fn serialize_bool_to_string<S>(value: &Option<bool>, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -30,7 +31,25 @@ where
     }
 }
 
-pub fn serialize_ordered<T>(profiles: &HashMap<String, T>, path: PathBuf) -> Result<()>
+pub enum FileName {
+    Config,
+    Credentials,
+}
+
+impl Display for FileName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileName::Config => write!(f, "Config"),
+            FileName::Credentials => write!(f, "Credentials"),
+        }
+    }
+}
+
+pub fn serialize_write_ordered<T>(
+    profiles: &HashMap<String, T>,
+    path: PathBuf,
+    file_name: FileName,
+) -> Result<()>
 where
     T: Serialize,
 {
@@ -45,6 +64,8 @@ where
         serde_ini::to_writer(&mut writer, profile)?;
         write!(writer, "\n")?;
     }
+
+    info!("AWS {} file modified", file_name);
 
     Ok(())
 }

@@ -1,4 +1,4 @@
-use crate::serde_support::serialize_ordered;
+use crate::serde_support::{serialize_write_ordered, FileName};
 use anyhow::{anyhow, bail, Result};
 use chrono::{DateTime, Utc};
 use directories::UserDirs;
@@ -64,7 +64,7 @@ impl AwsCredentials {
 
     pub fn write(profiles: &HashMap<String, AwsCredentials>) -> Result<()> {
         let credentials_path = Self::file_path()?;
-        serialize_ordered(profiles, credentials_path)
+        serialize_write_ordered(profiles, credentials_path, FileName::Credentials)
     }
 
     pub fn get(

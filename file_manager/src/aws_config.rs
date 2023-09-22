@@ -1,5 +1,5 @@
 ﻿use crate::serde_support::{
-    deserialize_string_to_bool, serialize_bool_to_string, serialize_ordered,
+    deserialize_string_to_bool, serialize_bool_to_string, serialize_write_ordered, FileName,
 };
 use anyhow::{anyhow, Result};
 use directories::UserDirs;
@@ -87,7 +87,7 @@ impl AwsConfig {
 
     pub fn write(profiles: &HashMap<String, AwsConfig>) -> Result<()> {
         let credentials_path = Self::file_path()?;
-        serialize_ordered(profiles, credentials_path)
+        serialize_write_ordered(profiles, credentials_path, FileName::Config)
     }
 
     pub fn get(profile_name: &str, profiles: &HashMap<String, AwsConfig>) -> Result<AwsConfig> {

@@ -3,6 +3,7 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::Input;
 use file_manager::aws_config::AwsConfig;
 use std::collections::HashMap;
+use tracing::log::info;
 
 pub fn configure_profile(
     profiles: &mut HashMap<String, AwsConfig>,
@@ -10,7 +11,7 @@ pub fn configure_profile(
 ) -> Result<()> {
     let profile = AwsConfig::get(profile_name, profiles).unwrap_or_default();
 
-    println!("Configuring profile: {}", profile_name);
+    info!("Configuring profile: {}", profile_name);
 
     let azure_tenant_id: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Azure Tenant ID")

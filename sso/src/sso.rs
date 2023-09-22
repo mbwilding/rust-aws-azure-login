@@ -1,21 +1,29 @@
-use crate::filter::{handler, Filters};
 use crate::saml_request::create_login_url;
 use crate::saml_response::{parse_roles_from_saml_response, Role};
 use anyhow::{anyhow, bail, Result};
 use aws_sdk_sts::config::Region;
 use aws_smithy_types::date_time::Format;
 use chrono::Utc;
+use crossbeam::channel;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
 use directories::UserDirs;
 use file_manager::aws_config::AwsConfig;
 use file_manager::aws_credentials::AwsCredentials;
+use headless_chrome::browser::tab::RequestPausedDecision;
+use headless_chrome::browser::transport::{SessionId, Transport};
+use headless_chrome::protocol::cdp::Fetch::events::RequestPausedEvent;
+use headless_chrome::protocol::cdp::Fetch::{
+    FulfillRequest, HeaderEntry, RequestPattern, RequestStage,
+};
 use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
+use log::info;
 use maplit::hashmap;
 use shared::args::Args;
 use std::collections::HashMap;
-use tracing::debug;
+use std::sync::Arc;
+use url::form_urlencoded;
 
 pub async fn login(
     configs: &HashMap<String, AwsConfig>,
@@ -37,7 +45,7 @@ pub async fn login(
 
     let profile = AwsConfig::get(profile_name, configs)?;
 
-    println!("Logging into profile: {}", profile_name);
+    info!("Logging into profile: {}", profile_name);
 
     let saml = perform_login(&profile, args)?;
 
@@ -82,6 +90,7 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
     }
 
     let launch_options_built = launch_options.build()?;
+
     let browser = Browser::new(launch_options_built)?;
 
     let azure_url = create_login_url(profile)?;
@@ -96,65 +105,75 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
         background: None,
     })?;
 
+    tab.stop_loading()?;
+
     tab.set_extra_http_headers(hashmap! {
         "Accept-Language" => "en"
     })?;
 
-    tab.set_default_timeout(std::time::Duration::from_secs(100));
+    tab.set_default_timeout(std::time::Duration::from_secs(200));
 
-    // TODO: Cover all login cases and fix response handling
-    if false {
-        let filters = Filters {
-            urls: vec![azure_url, "amazon".to_string()],
-        };
+    let aws_url = profile.azure_app_id_uri.clone().unwrap();
+    let patterns = vec![
+        // RequestPattern {
+        //     url_pattern: Some(aws_url.clone()),
+        //     resource_Type: None,
+        //     request_stage: Some(RequestStage::Request),
+        // },
+        RequestPattern {
+            url_pattern: Some(aws_url.clone()),
+            resource_Type: None,
+            request_stage: Some(RequestStage::Response),
+        },
+    ];
+    tab.enable_fetch(Some(&patterns), None)?;
 
-        tab.register_response_handling(
-            "saml",
-            Box::new(move |params, get_response_body| {
-                handler(params, get_response_body, &filters);
-            }),
-        )?;
+    let (sender, receiver) = channel::unbounded();
 
-        // Username
-        debug!("Waiting for sign in page to load");
-        tab.wait_until_navigated()?;
-        debug!("Finding username field");
-        let field = tab.wait_for_element("input#i0116")?;
-        debug!("Clicking username field");
-        field.click()?;
-        debug!("Entering username");
-        tab.send_character(
-            profile
-                .azure_default_username
-                .as_ref()
-                .ok_or(anyhow!("azure_default_username not set"))?,
-        )?;
-        debug!("Finding next button");
-        let button = tab.wait_for_element("input#idSIButton9")?;
-        debug!("Clicking next button");
-        button.click()?;
+    tab.enable_request_interception(Arc::new(
+        move |_transport: Arc<Transport>,
+              _session_id: SessionId,
+              intercepted: RequestPausedEvent| {
+            if intercepted.params.request.url.contains(&aws_url) {
+                let response_data = intercepted.params.request.post_data.unwrap();
 
-        // Password
-        debug!("Waiting for password page to load");
-        tab.wait_until_navigated()?;
-        debug!("Finding password field");
-        let field = tab.wait_for_element("input#i0118")?;
-        debug!("Clicking password field");
-        field.click()?;
-        debug!("Entering password");
-        tab.send_character("TODO: Securely saved password")?;
-        debug!("Finding next button");
-        let button = tab.wait_for_element("input#idSIButton9")?;
-        debug!("Clicking next button");
-        button.click()?;
+                sender.send(response_data).unwrap();
 
-        debug!("Finished");
-    }
+                let headers = vec![HeaderEntry {
+                    name: "Content-Type".to_string(),
+                    value: "text/plain".to_string(),
+                }];
 
-    let saml_response = tab.wait_for_element("form#saml_form > input[name=SAMLResponse]")?;
-    let saml = saml_response.get_attribute_value("value")?.unwrap();
+                let fulfill_request = FulfillRequest {
+                    request_id: intercepted.params.request_id,
+                    response_code: 200,
+                    response_headers: Some(headers),
+                    binary_response_headers: None,
+                    body: None,
+                    response_phrase: None,
+                };
 
-    Ok(saml)
+                return RequestPausedDecision::Fulfill(fulfill_request);
+            }
+
+            RequestPausedDecision::Continue(None)
+        },
+    ))?;
+
+    tab.reload(false, None)?;
+
+    let saml_response = receiver
+        .recv()
+        .unwrap()
+        .strip_prefix("SAMLResponse=")
+        .unwrap()
+        .to_string();
+
+    let saml_response_decoded: String = form_urlencoded::parse(saml_response.as_bytes())
+        .map(|(key, _)| key)
+        .collect();
+
+    Ok(saml_response_decoded)
 }
 
 fn role_and_duration(
