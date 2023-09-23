@@ -11,7 +11,7 @@ pub struct Args {
 
     /// Force a credential refresh, even if they are still valid
     #[arg(short, long, default_value_t = false)]
-    pub force_refresh: bool,
+    pub force: bool,
 
     /// Configure the profile
     #[arg(short, long, default_value_t = false)]
@@ -21,9 +21,9 @@ pub struct Args {
     #[arg(short, long, default_value_t = true)]
     pub sandbox: bool,
 
-    /// NOT IMPLEMENTED | Additionally returns the JSON credentials to stdout, for consumption by AWS Config [credential_process]
+    /// Additionally returns the JSON credentials to stdout, for consumption by AWS Config [credential_process]
     #[arg(short, long, default_value_t = false)]
-    json: bool, // TODO: implement this
+    pub json: bool,
 
     /// Enables verbose logging to the console and viewing the browser automation
     #[arg(short, long, default_value_t = cfg!(debug_assertions))]

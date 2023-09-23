@@ -9,12 +9,35 @@ mod login;
 async fn main() -> anyhow::Result<()> {
     let args = shared::args::Args::parse();
 
-    if args.debug {
-        tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .with_target(true)
-            .with_line_number(true)
-            .init();
+    // TODO: Refactor
+    if args.json {
+        let logging = tracing_subscriber::fmt().with_writer(std::io::stderr);
+        if args.debug {
+            logging
+                .with_max_level(tracing::Level::DEBUG)
+                .with_target(true)
+                .with_line_number(true)
+                .init();
+        } else {
+            logging
+                .with_max_level(tracing::Level::INFO)
+                .with_target(false)
+                .init();
+        }
+    } else {
+        let logging = tracing_subscriber::fmt();
+        if args.debug {
+            logging
+                .with_max_level(tracing::Level::DEBUG)
+                .with_target(true)
+                .with_line_number(true)
+                .init();
+        } else {
+            logging
+                .with_max_level(tracing::Level::INFO)
+                .with_target(false)
+                .init();
+        }
     }
 
     let profile_name = args
@@ -32,16 +55,9 @@ async fn main() -> anyhow::Result<()> {
     let mut credentials = AwsCredentials::read_file().unwrap_or_default();
 
     if args.all {
-        login::login_profiles(&configs, &mut credentials, args.force_refresh, &args).await?;
+        login::login_profiles(&configs, &mut credentials, args.force, &args).await?;
     } else {
-        login::login_profile(
-            &configs,
-            &mut credentials,
-            &profile_name,
-            args.force_refresh,
-            &args,
-        )
-        .await?;
+        login::login_profile(&configs, &mut credentials, &profile_name, args.force, &args).await?;
     }
 
     Ok(())
