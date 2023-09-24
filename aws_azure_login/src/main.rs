@@ -5,6 +5,27 @@ use file_manager::aws_credentials::AwsCredentials;
 mod config;
 mod login;
 
+#[macro_export]
+macro_rules! init_logging {
+    ($builder:expr, $debug:expr) => {
+        let logging = $builder;
+
+        if $debug {
+            logging
+                .with_max_level(tracing::Level::DEBUG)
+                .with_target(true)
+                .with_line_number(true)
+                .init();
+        } else {
+            logging
+                .with_max_level(tracing::Level::INFO)
+                .with_target(false)
+                .with_line_number(false)
+                .init();
+        }
+    };
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = shared::args::Args::parse();
@@ -12,32 +33,10 @@ async fn main() -> anyhow::Result<()> {
     // TODO: Refactor
     if args.json {
         let logging = tracing_subscriber::fmt().with_writer(std::io::stderr);
-        if args.debug {
-            logging
-                .with_max_level(tracing::Level::DEBUG)
-                .with_target(true)
-                .with_line_number(true)
-                .init();
-        } else {
-            logging
-                .with_max_level(tracing::Level::INFO)
-                .with_target(false)
-                .init();
-        }
+        init_logging!(logging, args.debug);
     } else {
         let logging = tracing_subscriber::fmt();
-        if args.debug {
-            logging
-                .with_max_level(tracing::Level::DEBUG)
-                .with_target(true)
-                .with_line_number(true)
-                .init();
-        } else {
-            logging
-                .with_max_level(tracing::Level::INFO)
-                .with_target(false)
-                .init();
-        }
+        init_logging!(logging, args.debug);
     }
 
     let profile_name = args
