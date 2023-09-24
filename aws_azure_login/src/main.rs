@@ -5,24 +5,24 @@ use file_manager::aws_credentials::AwsCredentials;
 mod config;
 mod login;
 
+/// Required due to using the stderr writer vs no writer specified
+/// SubscriberBuilder<fn() -> Stderr> vs SubscriberBuilder
 #[macro_export]
 macro_rules! init_logging {
     ($builder:expr, $debug:expr) => {
         let logging = $builder;
 
-        if $debug {
-            logging
-                .with_max_level(tracing::Level::DEBUG)
-                .with_target(true)
-                .with_line_number(true)
-                .init();
+        let level = if $debug {
+            tracing::Level::DEBUG
         } else {
-            logging
-                .with_max_level(tracing::Level::INFO)
-                .with_target(false)
-                .with_line_number(false)
-                .init();
-        }
+            tracing::Level::INFO
+        };
+
+        logging
+            .with_max_level(level)
+            .with_target($debug)
+            .with_line_number($debug)
+            .init();
     };
 }
 
@@ -30,7 +30,6 @@ macro_rules! init_logging {
 async fn main() -> anyhow::Result<()> {
     let args = shared::args::Args::parse();
 
-    // TODO: Refactor
     if args.json {
         let logging = tracing_subscriber::fmt().with_writer(std::io::stderr);
         init_logging!(logging, args.debug);
