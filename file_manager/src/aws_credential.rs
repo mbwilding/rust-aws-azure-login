@@ -9,7 +9,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AwsCredentials {
+pub struct AwsCredential {
     // TODO: Possibly make a hash map
     #[serde(skip)]
     pub profile_name: Option<String>,
@@ -42,7 +42,7 @@ where
     }
 }
 
-impl AwsCredentials {
+impl AwsCredential {
     fn file_path() -> Result<PathBuf> {
         match UserDirs::new() {
             Some(user_dirs) => Ok(user_dirs.home_dir().join(".aws/credentials")),
@@ -50,27 +50,27 @@ impl AwsCredentials {
         }
     }
 
-    pub fn read_file() -> Result<HashMap<String, AwsCredentials>> {
+    pub fn read_file() -> Result<HashMap<String, AwsCredential>> {
         let credentials_path = Self::file_path()?;
         if !credentials_path.exists() {
             bail!("AWS credentials file not found")
         }
         let file = File::open(credentials_path)?;
         let reader = BufReader::new(file);
-        let aws_credentials: HashMap<String, AwsCredentials> = serde_ini::from_bufread(reader)?;
+        let aws_credentials: HashMap<String, AwsCredential> = serde_ini::from_bufread(reader)?;
 
         Ok(aws_credentials)
     }
 
-    pub fn write(profiles: &HashMap<String, AwsCredentials>) -> Result<()> {
+    pub fn write(profiles: &HashMap<String, AwsCredential>) -> Result<()> {
         let credentials_path = Self::file_path()?;
         serialize_write_ordered(profiles, credentials_path, FileName::Credentials)
     }
 
     pub fn get(
         profile_name: &str,
-        profiles: &HashMap<String, AwsCredentials>,
-    ) -> Result<AwsCredentials> {
+        profiles: &HashMap<String, AwsCredential>,
+    ) -> Result<AwsCredential> {
         let profile = profiles.get(profile_name).ok_or_else(|| {
             anyhow!(
                 "Profile '{}' not found in the AWS credentials file",
@@ -93,8 +93,8 @@ impl AwsCredentials {
 
     pub fn upsert(
         profile_name: &str,
-        profile: &AwsCredentials,
-        profiles: &mut HashMap<String, AwsCredentials>,
+        profile: &AwsCredential,
+        profiles: &mut HashMap<String, AwsCredential>,
     ) -> Result<()> {
         let _ = profiles.insert(profile_name.to_owned(), profile.to_owned());
 

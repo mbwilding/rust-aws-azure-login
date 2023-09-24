@@ -9,7 +9,7 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
 use directories::UserDirs;
 use file_manager::aws_config::AwsConfig;
-use file_manager::aws_credentials::AwsCredentials;
+use file_manager::aws_credential::AwsCredential;
 use headless_chrome::browser::tab::RequestPausedDecision;
 use headless_chrome::browser::transport::{SessionId, Transport};
 use headless_chrome::protocol::cdp::Fetch::events::RequestPausedEvent;
@@ -27,14 +27,14 @@ use url::form_urlencoded;
 
 pub async fn login(
     configs: &HashMap<String, AwsConfig>,
-    credentials: &mut HashMap<String, AwsCredentials>,
+    credentials: &mut HashMap<String, AwsCredential>,
     profile_name: &str,
     force_refresh: bool,
     no_prompt: bool,
     args: &Args,
-) -> Result<AwsCredentials> {
+) -> Result<AwsCredential> {
     if !force_refresh {
-        let credential = AwsCredentials::get(profile_name, credentials);
+        let credential = AwsCredential::get(profile_name, credentials);
         if credential.is_ok() {
             let credential = credential.unwrap();
             if !credential.is_profile_about_to_expire() {
@@ -240,7 +240,7 @@ async fn assume_role(
     role: &Role,
     duration_hours: u8,
     region: Option<String>,
-) -> Result<AwsCredentials> {
+) -> Result<AwsCredential> {
     let config = if let Some(region_str) = region {
         aws_config::from_env()
             .region(Region::new(region_str))
@@ -289,7 +289,7 @@ async fn assume_role(
         .map(|dt| dt.with_timezone(&Utc))
         .map_err(|e| anyhow!("Failed to parse datetime: {:?}", e))?;
 
-    Ok(AwsCredentials {
+    Ok(AwsCredential {
         profile_name: Some(profile_name.to_owned()),
         aws_access_key_id: Some(access_key_id),
         aws_secret_access_key: Some(secret_access_key),

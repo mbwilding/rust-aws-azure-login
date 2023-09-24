@@ -1,14 +1,16 @@
+use crate::json::JsonCredential;
 use clap::Parser;
 use file_manager::aws_config::AwsConfig;
-use file_manager::aws_credentials::AwsCredentials;
+use file_manager::aws_credential::AwsCredential;
 
 mod config;
+mod json;
 mod login;
 
 /// Required due to using the stderr writer vs no writer specified
 /// SubscriberBuilder<fn() -> Stderr> vs SubscriberBuilder
 #[macro_export]
-macro_rules! init_logging {
+macro_rules! init_tracing {
     ($builder:expr, $debug:expr) => {
         let logging = $builder;
 
@@ -32,10 +34,10 @@ async fn main() -> anyhow::Result<()> {
 
     if args.json {
         let logging = tracing_subscriber::fmt().with_writer(std::io::stderr);
-        init_logging!(logging, args.debug);
+        init_tracing!(logging, args.debug);
     } else {
         let logging = tracing_subscriber::fmt();
-        init_logging!(logging, args.debug);
+        init_tracing!(logging, args.debug);
     }
 
     let profile_name = args
@@ -50,12 +52,20 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let configs = AwsConfig::read_file()?;
-    let mut credentials = AwsCredentials::read_file().unwrap_or_default();
+    let mut credentials = AwsCredential::read_file().unwrap_or_default();
 
     if args.all {
         login::login_profiles(&configs, &mut credentials, args.force, &args).await?;
     } else {
-        login::login_profile(&configs, &mut credentials, &profile_name, args.force, &args).await?;
+        let credentials =
+            login::login_profile(&configs, &mut credentials, &profile_name, args.force, &args)
+                .await?;
+
+        if args.json {
+            let json_credentials = JsonCredential::convert(credentials);
+            let json = serde_json::to_string_pretty(&json_credentials)?;
+            println!("{}", json);
+        }
     }
 
     Ok(())

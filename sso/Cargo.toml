@@ -19,9 +19,9 @@ headless_chrome = { git = "https://github.com/atroche/rust-headless-chrome", fea
 log = "0.4.20"
 serde = { version = "1.0", features = ["derive"] }
 serde-xml-rs = "0.6"
-dialoguer = "0.10"
+dialoguer = "0.11"
 directories = "5.0"
-aws-sdk-sts = "0.30"
+aws-sdk-sts = "0.31"
 aws-config = "0.56"
 aws-credential-types = "0.56"
 aws-smithy-types = "0.56"
