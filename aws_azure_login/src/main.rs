@@ -57,12 +57,12 @@ async fn main() -> anyhow::Result<()> {
     if args.all {
         login::login_profiles(&configs, &mut credentials, args.force, &args).await?;
     } else {
-        let credentials =
+        let credential =
             login::login_profile(&configs, &mut credentials, &profile_name, args.force, &args)
                 .await?;
 
         if args.json {
-            let json_credentials = JsonCredential::convert(credentials);
+            let json_credentials = JsonCredential::convert(credential);
             let json = serde_json::to_string_pretty(&json_credentials)?;
             println!("{}", json);
         }

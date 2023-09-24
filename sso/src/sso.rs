@@ -29,11 +29,11 @@ pub async fn login(
     configs: &HashMap<String, AwsConfig>,
     credentials: &mut HashMap<String, AwsCredential>,
     profile_name: &str,
-    force_refresh: bool,
+    force: bool,
     no_prompt: bool,
     args: &Args,
 ) -> Result<AwsCredential> {
-    if !force_refresh {
+    if !force {
         let credential = AwsCredential::get(profile_name, credentials);
         if credential.is_ok() {
             let credential = credential.unwrap();
