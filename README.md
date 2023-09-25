@@ -10,7 +10,8 @@ This project is a Rust-based rewrite of the JavaScript [`aws-azure-login`](https
 
 ## TODO
 
-- [ ] Automate the headless browser (Other code is done)
+- [ ] OTKA
+- [ ] Logic to only show browser when input is needed
 
 ## Features
 

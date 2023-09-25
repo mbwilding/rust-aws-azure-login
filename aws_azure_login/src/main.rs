@@ -6,7 +6,6 @@ use tracing_subscriber::EnvFilter;
 
 mod config;
 mod json;
-mod login;
 
 /// Required due to using the stderr writer vs no writer specified
 /// SubscriberBuilder<fn() -> Stderr> vs SubscriberBuilder
@@ -50,11 +49,9 @@ async fn main() -> anyhow::Result<()> {
     let mut credentials = AwsCredential::read_file().unwrap_or_default();
 
     if args.all {
-        login::login_profiles(&configs, &mut credentials, args.force, &args).await?;
+        sso::sso::login_all(&configs, &mut credentials, &args).await?;
     } else {
-        let credential =
-            login::login_profile(&configs, &mut credentials, &profile_name, args.force, &args)
-                .await?;
+        let credential = sso::sso::login(&configs, &mut credentials, &profile_name, &args).await?;
 
         if args.json {
             let json_credentials = JsonCredential::convert(credential);

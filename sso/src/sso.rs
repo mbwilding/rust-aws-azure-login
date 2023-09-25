@@ -28,11 +28,9 @@ pub async fn login(
     configs: &HashMap<String, AwsConfig>,
     credentials: &mut HashMap<String, AwsCredential>,
     profile_name: &str,
-    force: bool,
-    no_prompt: bool,
     args: &Args,
 ) -> Result<AwsCredential> {
-    if !force {
+    if !args.force {
         let credential = AwsCredential::get(profile_name, credentials);
         if credential.is_ok() {
             let credential = credential.unwrap();
@@ -42,31 +40,44 @@ pub async fn login(
         }
     }
 
-    let profile = AwsConfig::get(profile_name, configs)?;
+    let config = AwsConfig::get(profile_name, configs)?;
 
     info!("Logging into profile: {}", profile_name);
 
-    let saml = perform_login(&profile, args)?;
-
+    let saml = perform_login(&config, args)?;
     let roles = parse_roles_from_saml_response(&saml)?;
 
     let (role, duration_hours) = role_and_duration(
         roles,
-        no_prompt,
-        profile.azure_default_role_arn.clone(),
-        profile.azure_default_duration_hours,
+        config.azure_default_role_arn.clone(),
+        config.azure_default_duration_hours,
     )?;
 
-    let credentials = assume_role(
+    let credential = assume_role(
         profile_name,
         &saml,
         &role,
         duration_hours,
-        profile.region.to_owned(),
+        config.region.to_owned(),
     )
     .await?;
 
-    Ok(credentials)
+    AwsCredential::upsert(profile_name, &credential, credentials)?;
+    AwsCredential::write(&credentials)?;
+
+    Ok(credential)
+}
+
+pub async fn login_all(
+    configs: &HashMap<String, AwsConfig>,
+    credentials: &mut HashMap<String, AwsCredential>,
+    args: &Args,
+) -> Result<()> {
+    for (profile_name, _) in configs {
+        login(configs, credentials, profile_name, args).await?;
+    }
+
+    Ok(())
 }
 
 fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
@@ -162,7 +173,6 @@ fn saml_sso_fetch(profile: &AwsConfig, args: &Args, headless: bool) -> Result<St
 
 fn role_and_duration(
     roles: Vec<Role>,
-    no_prompt: bool,
     default_role_arn: Option<String>,
     default_duration_hours: Option<u8>,
 ) -> Result<(Role, u8)> {
@@ -172,33 +182,13 @@ fn role_and_duration(
         bail!("No roles found in SAML response.");
     } else if roles.len() == 1 {
         roles.first().unwrap().to_owned()
-    } else if no_prompt {
-        if let Some(ref arn) = default_role_arn {
-            if let Some(role) = roles.iter().find(|r| &r.role_arn == arn) {
-                role.to_owned()
-            } else {
-                bail!("No role matching the default role ARN found in the SAML response.");
-            }
-        } else {
-            bail!("No default role ARN provided and multiple roles found in SAML response.");
-        }
+    } else if let Some(default_role_arn) = &default_role_arn {
+        get_default_role(&roles, &Some(default_role_arn.clone()))?
     } else {
-        let selection = Select::new()
-            .with_prompt("Role")
-            .default(0)
-            .items(
-                &roles
-                    .iter()
-                    .map(|r| r.role_arn.as_str())
-                    .collect::<Vec<_>>(),
-            )
-            .interact()
-            .unwrap();
-
-        roles[selection].to_owned()
+        select_role_interactively(&roles)
     };
 
-    if !no_prompt || default_duration_hours.is_none() {
+    if default_duration_hours.is_none() {
         duration_hours = loop {
             let input: String = Input::with_theme(&ColorfulTheme::default())
                 .with_prompt("Default Session Duration Hours (up to 12)")
@@ -216,6 +206,34 @@ fn role_and_duration(
     }
 
     Ok((selected_role, duration_hours))
+}
+
+fn get_default_role(roles: &[Role], default_role_arn: &Option<String>) -> Result<Role> {
+    match default_role_arn {
+        Some(arn) => roles
+            .iter()
+            .find(|r| &r.role_arn == arn)
+            .cloned()
+            .ok_or_else(|| {
+                anyhow!("No role matching the default role ARN found in the SAML response.")
+            }),
+        None => bail!("No default role ARN provided and multiple roles found in SAML response."),
+    }
+}
+
+fn select_role_interactively(roles: &[Role]) -> Role {
+    let selection = Select::new()
+        .with_prompt("Role")
+        .default(0)
+        .items(
+            &roles
+                .iter()
+                .map(|r| r.role_arn.as_str())
+                .collect::<Vec<_>>(),
+        )
+        .interact()
+        .unwrap();
+    roles[selection].to_owned()
 }
 
 async fn assume_role(
