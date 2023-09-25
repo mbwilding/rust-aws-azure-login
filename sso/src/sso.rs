@@ -3,26 +3,18 @@ use crate::saml_response::{parse_roles_from_saml_response, Role};
 use anyhow::{anyhow, bail, Result};
 use aws_sdk_sts::config::Region;
 use aws_smithy_types::date_time::Format;
+use chromiumoxide::cdp::browser_protocol::target::CreateTargetParams;
+use chromiumoxide::{Browser, BrowserConfig};
 use chrono::Utc;
-use crossbeam::channel;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Input, Select};
 use directories::UserDirs;
 use file_manager::aws_config::AwsConfig;
 use file_manager::aws_credential::AwsCredential;
-use headless_chrome::browser::tab::RequestPausedDecision;
-use headless_chrome::browser::transport::{SessionId, Transport};
-use headless_chrome::protocol::cdp::Fetch::events::RequestPausedEvent;
-use headless_chrome::protocol::cdp::Fetch::{RequestPattern, RequestStage};
-use headless_chrome::protocol::cdp::Target::CreateTarget;
-use headless_chrome::{Browser, LaunchOptions};
+use futures::StreamExt;
 use log::info;
-use maplit::hashmap;
 use shared::args::Args;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-use url::form_urlencoded;
 
 pub async fn login(
     configs: &HashMap<String, AwsConfig>,
@@ -44,7 +36,7 @@ pub async fn login(
 
     info!("Logging into profile: {}", profile_name);
 
-    let saml = perform_login(&config, args)?;
+    let saml = perform_login(&config, args).await?;
     let roles = parse_roles_from_saml_response(&saml)?;
 
     let (role, duration_hours) = role_and_duration(
@@ -80,97 +72,69 @@ pub async fn login_all(
     Ok(())
 }
 
-fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
-    let mut saml_response_result = saml_sso_fetch(profile, args, !args.debug);
+async fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
+    let mut saml_response_result = saml_sso_fetch(profile, args, !args.debug).await;
 
     if saml_response_result.is_err() {
         // TODO: Make `saml_sso_fetch` return an error early if asking for details
-        saml_response_result = saml_sso_fetch(profile, args, false);
+        saml_response_result = saml_sso_fetch(profile, args, false).await;
     }
 
     saml_response_result
 }
 
-fn saml_sso_fetch(profile: &AwsConfig, args: &Args, headless: bool) -> Result<String> {
+async fn saml_sso_fetch(profile: &AwsConfig, args: &Args, headless: bool) -> Result<String> {
     let width = 425;
     let height = 550;
 
-    let mut launch_options = LaunchOptions::default_builder();
-
-    launch_options
-        .headless(headless)
-        .sandbox(args.sandbox)
-        .window_size(Some((width, height)))
-        .idle_browser_timeout(Duration::from_secs(3600)); // TODO: Revise
+    let mut config = BrowserConfig::builder().window_size(width, height);
 
     if profile.azure_default_remember_me == Some(true) {
         let user_data_path = match UserDirs::new() {
             Some(user_dirs) => user_dirs.home_dir().join(".aws/chromium"),
             None => Err(anyhow!("Unable to get user directories"))?,
         };
-        launch_options.user_data_dir(Some(user_data_path));
+        config = config.user_data_dir(user_data_path);
     }
 
-    let launch_options_built = launch_options.build()?;
+    if !headless {
+        config = config.with_head();
+    }
 
-    let browser = Browser::new(launch_options_built)?;
+    if !args.sandbox {
+        config = config.no_sandbox();
+    }
+
+    let config_built = config.build().map_err(|e| anyhow!(e))?;
+
+    let (browser, mut handler) = Browser::launch(config_built).await?;
+
+    let handle = tokio::task::spawn(async move {
+        loop {
+            let _ = handler.next().await.unwrap();
+        }
+    });
 
     let azure_url = create_login_url(profile)?;
 
-    let tab = browser.new_tab_with_options(CreateTarget {
+    let page_params = CreateTargetParams {
         url: azure_url.clone(),
-        width: Some(width - 15),
-        height: Some(height - 35),
-        browser_context_id: None,
-        enable_begin_frame_control: None,
-        new_window: Some(false),
-        background: None,
-    })?;
+        width: Some((width - 15).into()),
+        height: Some((height - 35).into()),
+        ..Default::default()
+    };
 
-    tab.stop_loading()?; // TODO: Part 1 for interception hack, if already logged in it doesn't detect the response unless you reload the browser
+    let page = browser.new_page(page_params).await?;
 
-    tab.set_extra_http_headers(hashmap! {
-        "Accept-Language" => "en"
-    })?;
+    let elem = page
+        .find_element("form#saml_form > input[name=SAMLResponse]")
+        .await?;
 
-    let aws_url = profile.azure_app_id_uri.clone().unwrap();
-    let patterns = vec![RequestPattern {
-        url_pattern: Some(aws_url.clone()),
-        resource_Type: None,
-        request_stage: Some(RequestStage::Response),
-    }];
-    tab.enable_fetch(Some(&patterns), None)?;
+    let response = page.wait_for_navigation().await?.content().await?;
 
-    let (sender, receiver) = channel::bounded(1);
+    handle.await?;
 
-    tab.enable_request_interception(Arc::new(
-        move |_transport: Arc<Transport>,
-              _session_id: SessionId,
-              intercepted: RequestPausedEvent| {
-            if intercepted.params.request.url.contains(&aws_url) {
-                let response_data = intercepted.params.request.post_data.unwrap();
-                sender.send(response_data).unwrap();
-            }
-
-            RequestPausedDecision::Continue(None)
-        },
-    ))?;
-
-    tab.reload(false, None)?; // TODO: Part 2 for interception hack, if already logged in it doesn't detect the response unless you reload the browser
-
-    let saml_response = receiver
-        .recv()?
-        .strip_prefix("SAMLResponse=")
-        .unwrap()
-        .to_string();
-
-    let saml_response_decoded = form_urlencoded::parse(saml_response.as_bytes())
-        .map(|(key, _)| key)
-        .collect();
-
-    tab.wait_until_navigated()?; // TODO: Allows time for the remember me response to go through and set the cookies
-
-    Ok(saml_response_decoded)
+    Ok(response)
 }
 
 fn role_and_duration(
@@ -181,7 +145,7 @@ fn role_and_duration(
     let mut duration_hours: u8 = default_duration_hours.unwrap_or_default();
 
     let selected_role = if roles.is_empty() {
-        bail!("No roles found in SAML response.");
+        bail!("No roles found in SAML response");
     } else if roles.len() == 1 {
         roles.first().unwrap().to_owned()
     } else if let Some(default_role_arn) = &default_role_arn {
@@ -217,9 +181,9 @@ fn get_default_role(roles: &[Role], default_role_arn: &Option<String>) -> Result
             .find(|r| &r.role_arn == arn)
             .cloned()
             .ok_or_else(|| {
-                anyhow!("No role matching the default role ARN found in the SAML response.")
+                anyhow!("No role matching the default role ARN found in the SAML response")
             }),
-        None => bail!("No default role ARN provided and multiple roles found in SAML response."),
+        None => bail!("No default role ARN provided and multiple roles found in SAML response"),
     }
 }
 
