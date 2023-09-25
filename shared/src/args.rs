@@ -26,6 +26,6 @@ pub struct Args {
     pub json: bool,
 
     /// Enables verbose logging to the console and viewing the browser automation
-    #[arg(short, long, default_value_t = cfg!(debug_assertions))]
+    #[arg(short, long, default_value_t = false)]
     pub debug: bool,
 }

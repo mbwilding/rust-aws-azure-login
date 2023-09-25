@@ -2,6 +2,7 @@ use crate::json::JsonCredential;
 use clap::Parser;
 use file_manager::aws_config::AwsConfig;
 use file_manager::aws_credential::AwsCredential;
+use tracing_subscriber::EnvFilter;
 
 mod config;
 mod json;
@@ -14,16 +15,10 @@ macro_rules! init_tracing {
     ($builder:expr, $debug:expr) => {
         let logging = $builder;
 
-        let level = if $debug {
-            tracing::Level::DEBUG
-        } else {
-            tracing::Level::INFO
-        };
-
         logging
-            .with_max_level(level)
             .with_target($debug)
             .with_line_number($debug)
+            .with_env_filter(EnvFilter::from("headless_chrome=off,tungstenite=off"))
             .init();
     };
 }

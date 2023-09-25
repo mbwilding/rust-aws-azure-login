@@ -13,9 +13,7 @@ use file_manager::aws_credential::AwsCredential;
 use headless_chrome::browser::tab::RequestPausedDecision;
 use headless_chrome::browser::transport::{SessionId, Transport};
 use headless_chrome::protocol::cdp::Fetch::events::RequestPausedEvent;
-use headless_chrome::protocol::cdp::Fetch::{
-    FulfillRequest, HeaderEntry, RequestPattern, RequestStage,
-};
+use headless_chrome::protocol::cdp::Fetch::{RequestPattern, RequestStage};
 use headless_chrome::protocol::cdp::Target::CreateTarget;
 use headless_chrome::{Browser, LaunchOptions};
 use log::info;
@@ -23,6 +21,7 @@ use maplit::hashmap;
 use shared::args::Args;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use url::form_urlencoded;
 
 pub async fn login(
@@ -71,15 +70,27 @@ pub async fn login(
 }
 
 fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
+    let mut saml_response_result = saml_sso_fetch(profile, args, !args.debug);
+
+    if saml_response_result.is_err() {
+        // TODO: Make `saml_sso_fetch` return an error early if asking for details
+        saml_response_result = saml_sso_fetch(profile, args, false);
+    }
+
+    saml_response_result
+}
+
+fn saml_sso_fetch(profile: &AwsConfig, args: &Args, headless: bool) -> Result<String> {
     let width = 425;
     let height = 550;
 
     let mut launch_options = LaunchOptions::default_builder();
 
     launch_options
-        .headless(!args.debug)
+        .headless(headless)
         .sandbox(args.sandbox)
-        .window_size(Some((width, height)));
+        .window_size(Some((width, height)))
+        .idle_browser_timeout(Duration::from_secs(3600)); // TODO: Revise
 
     if profile.azure_default_remember_me == Some(true) {
         let user_data_path = match UserDirs::new() {
@@ -111,24 +122,15 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
         "Accept-Language" => "en"
     })?;
 
-    tab.set_default_timeout(std::time::Duration::from_secs(200));
-
     let aws_url = profile.azure_app_id_uri.clone().unwrap();
-    let patterns = vec![
-        // RequestPattern {
-        //     url_pattern: Some(aws_url.clone()),
-        //     resource_Type: None,
-        //     request_stage: Some(RequestStage::Request),
-        // },
-        RequestPattern {
-            url_pattern: Some(aws_url.clone()),
-            resource_Type: None,
-            request_stage: Some(RequestStage::Response),
-        },
-    ];
+    let patterns = vec![RequestPattern {
+        url_pattern: Some(aws_url.clone()),
+        resource_Type: None,
+        request_stage: Some(RequestStage::Response),
+    }];
     tab.enable_fetch(Some(&patterns), None)?;
 
-    let (sender, receiver) = channel::unbounded();
+    let (sender, receiver) = channel::bounded(1);
 
     tab.enable_request_interception(Arc::new(
         move |_transport: Arc<Transport>,
@@ -136,24 +138,7 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
               intercepted: RequestPausedEvent| {
             if intercepted.params.request.url.contains(&aws_url) {
                 let response_data = intercepted.params.request.post_data.unwrap();
-
                 sender.send(response_data).unwrap();
-
-                let headers = vec![HeaderEntry {
-                    name: "Content-Type".to_string(),
-                    value: "text/plain".to_string(),
-                }];
-
-                let fulfill_request = FulfillRequest {
-                    request_id: intercepted.params.request_id,
-                    response_code: 200,
-                    response_headers: Some(headers),
-                    binary_response_headers: None,
-                    body: None,
-                    response_phrase: None,
-                };
-
-                return RequestPausedDecision::Fulfill(fulfill_request);
             }
 
             RequestPausedDecision::Continue(None)
@@ -163,8 +148,7 @@ fn perform_login(profile: &AwsConfig, args: &Args) -> Result<String> {
     tab.reload(false, None)?; // TODO: Part 2 for interception hack, if already logged in it doesn't detect the response unless you reload the browser
 
     let saml_response = receiver
-        .recv()
-        .unwrap()
+        .recv()?
         .strip_prefix("SAMLResponse=")
         .unwrap()
         .to_string();
