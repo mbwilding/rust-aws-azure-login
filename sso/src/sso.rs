@@ -63,7 +63,7 @@ pub async fn login(
     .await?;
 
     AwsCredential::upsert(profile_name, &credential, credentials)?;
-    AwsCredential::write(&credentials)?;
+    AwsCredential::write(credentials)?;
 
     Ok(credential)
 }
@@ -73,7 +73,7 @@ pub async fn login_all(
     credentials: &mut HashMap<String, AwsCredential>,
     args: &Args,
 ) -> Result<()> {
-    for (profile_name, _) in configs {
+    for profile_name in configs.keys() {
         login(configs, credentials, profile_name, args).await?;
     }
 
@@ -167,6 +167,8 @@ fn saml_sso_fetch(profile: &AwsConfig, args: &Args, headless: bool) -> Result<St
     let saml_response_decoded = form_urlencoded::parse(saml_response.as_bytes())
         .map(|(key, _)| key)
         .collect();
+
+    tab.wait_until_navigated()?; // TODO: Allows time for the remember me response to go through and set the cookies
 
     Ok(saml_response_decoded)
 }

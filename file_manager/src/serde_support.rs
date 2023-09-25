@@ -60,9 +60,9 @@ where
     sorted_profiles.sort_by_key(|x| x.0);
 
     for (key, profile) in sorted_profiles {
-        write!(writer, "[{}]\n", key)?;
+        writeln!(writer, "[{}]", key)?;
         serde_ini::to_writer(&mut writer, profile)?;
-        write!(writer, "\n")?;
+        writeln!(writer)?;
     }
 
     info!("AWS {} file modified", file_name);

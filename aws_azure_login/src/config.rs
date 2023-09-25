@@ -80,8 +80,7 @@ pub fn configure_profile(
         .default(profile.region.unwrap_or_default())
         .allow_empty(false)
         .interact_text()
-        .unwrap()
-        .into();
+        .unwrap();
 
     let okta_default_username: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Okta Username")
@@ -144,7 +143,7 @@ pub fn configure_profile(
     };
 
     AwsConfig::upsert(profile_name, &new_profile, profiles)?;
-    AwsConfig::write(&profiles)?;
+    AwsConfig::write(profiles)?;
 
     Ok(())
 }
